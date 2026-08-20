@@ -3,18 +3,7 @@ import { z } from 'zod';
 
 loadDotenv();
 
-/**
- * Environment validation.
- *
- * WHAT: the process refuses to start unless every setting it needs is present
- * and well-formed.
- *
- * WHY: an app that boots with a missing MONGODB_URI fails later, at 2am, inside
- * a request, with a confusing error. Validating at startup turns a mysterious
- * runtime failure into an obvious one-line message before the server ever
- * accepts traffic. Nothing in the codebase reads process.env directly; it reads
- * this typed `env` object instead.
- */
+
 
 const DEV_PLACEHOLDER = 'dev-only-insecure-secret-change-me';
 

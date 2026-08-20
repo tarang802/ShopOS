@@ -48,12 +48,7 @@ export function getDatabaseCapabilities(): DatabaseCapabilities {
   return capabilities;
 }
 
-/**
- * Multi-document transactions require a replica set or a sharded cluster; a
- * standalone mongod cannot run them. ShopOS needs them for stock transfers and
- * goods receipts, so we detect support at startup and warn early rather than
- * failing inside a transfer months from now.
- */
+
 async function detectCapabilities(): Promise<DatabaseCapabilities> {
   try {
     const admin = mongoose.connection.db?.admin();

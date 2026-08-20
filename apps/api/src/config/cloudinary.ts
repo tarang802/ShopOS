@@ -2,18 +2,6 @@ import { v2 as cloudinary } from 'cloudinary';
 import { env, features } from './env';
 import { AppError } from '../core/AppError';
 
-/**
- * Product images.
- *
- * Binaries never go into MongoDB. A document database holding image blobs
- * inflates every backup, slows every query that touches the collection, and
- * gives up the CDN delivery and on-the-fly resizing that an image host provides
- * for free.
- *
- * The upload path is browser -> Cloudinary -> URL back to this API. The API
- * signs the request but never carries the file, so a slow shop connection ties
- * up nothing on the server.
- */
 
 if (features.imageUpload) {
   cloudinary.config({
