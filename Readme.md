@@ -94,29 +94,6 @@ npm run dev
 
 API on <http://localhost:4000/api/v1>, web on <http://localhost:5173>.
 
-### Demo logins
-
-The seed creates a stationery wholesaler, Gupta Traders, with three branches,
-eight products, full rate cards and opening stock.
-
-| Who | Email | Password | Sees |
-|---|---|---|---|
-| Owner | `owner@guptatraders.test` | `shopos-demo-2026` | Everything |
-| Sales staff | `sunita@guptatraders.test` | `shopos-demo-2026` | Patna branch only, no rate editing |
-
-Sign in and search **Natraj**. Signing in as Sunita shows what branch scoping and
-permissions actually do.
-
-### MongoDB should be a replica set
-
-Stock transfers and corrections write several documents that must succeed or fail
-together, which MongoDB only allows on a replica set. Atlas already is one; for a
-local server it is a one-line config change. See
-[docs/deployment.md](docs/deployment.md). ShopOS runs without it and warns on
-**Administration → System Status**.
-
----
-
 ## Stack
 
 **Frontend** React 19, TypeScript, Vite, Tailwind v4, React Router, TanStack
@@ -140,34 +117,6 @@ scripts         End-to-end smoke test
 
 ## Scripts
 
-| Command | Effect |
 |---|---|
-| `npm run dev` | API and web together |
-| `npm run seed` | Rebuild the demo business (safe to re-run) |
-| `npm run smoke` | 36 end-to-end API checks against a running server |
-| `npm run build` | Production build of both |
-| `npm run typecheck` | Type-check every workspace |
-| `npm run format` | Prettier across the repo |
+| `npm run dev` | API and web together 
 
-## Documentation
-
-| Document | Contents |
-|---|---|
-| [architecture.md](docs/architecture.md) | Layering, multi-tenancy, the three engines, key decisions |
-| [database.md](docs/database.md) | Collections, embed vs reference, indexes, concurrency |
-| [api.md](docs/api.md) | Every endpoint, envelope, status codes |
-| [business-rules.md](docs/business-rules.md) | What the system enforces and why |
-| [security.md](docs/security.md) | Controls in place, standing rules, known gaps |
-| [keys-and-secrets.md](docs/keys-and-secrets.md) | Every key, where to get it, what breaks without it |
-| [deployment.md](docs/deployment.md) | Local setup, replica set, production |
-
-## Principles
-
-- The browser never talks to MongoDB and never holds credentials.
-- Business rules live in services, so a future mobile app uses the same ones.
-- Backend validation is authoritative; frontend validation is for the user.
-- Money is stored as integer paise, never as a float.
-- Stock is a ledger of movements, not a number people edit.
-- Authorization is permission-based; no code branches on a role name.
-- Tenant isolation is enforced in the data layer, so it cannot be forgotten.
-- Historical documents will keep the values they were written with, forever.
