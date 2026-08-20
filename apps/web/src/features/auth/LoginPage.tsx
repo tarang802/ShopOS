@@ -50,17 +50,29 @@ export function LoginPage() {
     },
   });
 
+  /**
+   * A Google account with no business yet.
+   *
+   * The API answers 409 in that case rather than inventing a business name. We
+   * keep the credential Google issued and ask for the name inline - sending the
+   * person away to the sign-up form would make them authenticate a second time
+   * for no reason. Google ID tokens stay valid for about an hour, which is far
+   * longer than it takes to type a shop name.
+   */
+  const [pendingCredential, setPendingCredential] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState('');
+
   const googleLogin = useMutation({
-    mutationFn: (credential: string) => api.post<Session>('/auth/google', { credential }),
+    mutationFn: (input: { credential: string; businessName?: string }) =>
+      api.post<Session>('/auth/google', input),
     onSuccess: (session) => {
       setSession(session);
       navigate('/', { replace: true });
     },
-    onError: (cause) => {
-      // A Google account with no business attached needs the sign-up flow, so
-      // the user is sent there rather than shown a dead end.
+    onError: (cause, variables) => {
       if (cause instanceof ApiRequestError && cause.status === 409) {
-        setError('No business is linked to this Google account yet. Create one to continue.');
+        setPendingCredential(variables.credential);
+        setError(null);
         return;
       }
       setError(cause instanceof ApiRequestError ? cause.message : 'Google sign-in failed.');
@@ -137,12 +149,50 @@ export function LoginPage() {
                 clientId={capabilities.googleClientId}
                 onCredential={(credential) => {
                   setError(null);
-                  googleLogin.mutate(credential);
+                  googleLogin.mutate({ credential });
                 }}
               />
             </>
           )}
         </div>
+
+        {pendingCredential && (
+          <form
+            className="mt-4 rounded-md border border-border bg-muted/40 p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              googleLogin.mutate({
+                credential: pendingCredential,
+                businessName: businessName.trim(),
+              });
+            }}
+          >
+            <p className="mb-3 text-sm">
+              Almost there. What is your business called?
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                आपके बिज़नेस का नाम क्या है?
+              </span>
+            </p>
+            <Field label="Business name" required>
+              <Input
+                value={businessName}
+                onChange={(event) => setBusinessName(event.target.value)}
+                placeholder="Gupta Traders"
+                autoFocus
+              />
+            </Field>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={businessName.trim().length < 2 || googleLogin.isPending}
+            >
+              {googleLogin.isPending ? 'Setting up your shop...' : 'Create my business'}
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Your first branch, staff roles and rate lists are set up automatically.
+            </p>
+          </form>
+        )}
 
         <p className="mt-5 text-center text-sm text-muted-foreground">
           New business?{' '}

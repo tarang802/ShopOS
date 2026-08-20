@@ -3,7 +3,18 @@ import { z } from 'zod';
 
 loadDotenv();
 
-
+/**
+ * Environment validation.
+ *
+ * WHAT: the process refuses to start unless every setting it needs is present
+ * and well-formed.
+ *
+ * WHY: an app that boots with a missing MONGODB_URI fails later, at 2am, inside
+ * a request, with a confusing error. Validating at startup turns a mysterious
+ * runtime failure into an obvious one-line message before the server ever
+ * accepts traffic. Nothing in the codebase reads process.env directly; it reads
+ * this typed `env` object instead.
+ */
 
 const DEV_PLACEHOLDER = 'dev-only-insecure-secret-change-me';
 
@@ -44,6 +55,13 @@ const envSchema = z
     CLOUDINARY_CLOUD_NAME: z.string().optional(),
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
+
+    /**
+     * Rate limit overrides. Left unset, the middleware picks a strict value in
+     * production and a generous one in development.
+     */
+    AUTH_RATE_LIMIT: z.coerce.number().int().min(1).optional(),
+    GENERAL_RATE_LIMIT: z.coerce.number().int().min(1).optional(),
 
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
   })

@@ -50,3 +50,23 @@ export async function withTransaction<T>(
 export function sessionOption(session: ClientSession | undefined): { session?: ClientSession } {
   return session ? { session } : {};
 }
+
+/**
+ * Options for `Model.create()` when several documents are inserted at once.
+ *
+ * WHY this exists separately: Mongoose refuses a multi-document `create()`
+ * inside a session unless `ordered: true` is stated, because unordered inserts
+ * can be reordered by the driver and that is not something a transaction can
+ * reason about. The failure only appears once transactions are actually
+ * available - on a standalone MongoDB the same code runs without a session and
+ * passes - so it is exactly the kind of bug that hides until deployment.
+ *
+ * Using this helper for every `create()` makes the option impossible to forget.
+ * It is harmless for single-document inserts.
+ */
+export function createOptions(session: ClientSession | undefined): {
+  session?: ClientSession;
+  ordered: true;
+} {
+  return session ? { session, ordered: true } : { ordered: true };
+}

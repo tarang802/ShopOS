@@ -7,7 +7,7 @@ import {
   type SystemRole,
 } from '@shopos/shared';
 import { Branch, Membership, Organization, PriceList, Role, Unit } from '../db/models';
-import { sessionOption } from '../db/transaction';
+import { createOptions } from '../db/transaction';
 
 /**
  * Everything a new business needs on its first day.
@@ -95,7 +95,9 @@ export async function bootstrapOrganization(
   options: { branchName?: string; city?: string },
   session?: ClientSession,
 ): Promise<BootstrapResult> {
-  const opts = sessionOption(session);
+  // createOptions carries `ordered: true`, which Mongoose requires for any
+  // multi-document create() inside a transaction.
+  const opts = createOptions(session);
 
   // 1. The head branch. Every business has at least one place that holds stock,
   //    so it is created up front rather than being another empty screen.

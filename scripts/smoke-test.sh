@@ -194,6 +194,37 @@ CROSS=$(curl -s -o /dev/null -w '%{http_code}' -H "$SAUTH" "$API/inventory/stock
 check "$CROSS" "404" "branch-scoped staff cannot query another branch"
 
 echo
+echo "=== 11. Registration bootstrap (runs inside a transaction) ==="
+# This path was previously untested: the seed calls bootstrapOrganization with no
+# session, so the multi-document create() inside a transaction was never
+# exercised until a replica set was in use. Registering here covers it.
+RND=$(date +%s)$$
+REG=$(curl -s -X POST "$API/auth/register" -H 'Content-Type: application/json'   -d "{\"name\":\"Smoke Test\",\"email\":\"smoke-$RND@example.test\",\"password\":\"a-long-enough-password\",\"businessName\":\"Smoke Test Shop $RND\"}")
+
+REGORG=$(echo "$REG" | python -c "import sys,json; print(json.load(sys.stdin)['data']['organization']['name'])" 2>/dev/null)
+check "$([ -n "$REGORG" ] && echo yes || echo no)" "yes" "a new business can be registered"
+
+REGPERMS=$(echo "$REG" | python -c "import sys,json; print(len(json.load(sys.stdin)['data']['membership']['permissions']))" 2>/dev/null)
+REGPERMS=${REGPERMS:-0}
+check "$([ "$REGPERMS" -gt 30 ] && echo many || echo few)" "many" "the new owner receives every permission"
+
+REGTOKEN=$(echo "$REG" | python -c "import sys,json; print(json.load(sys.stdin)['data']['accessToken'])" 2>/dev/null)
+REGAUTH="Authorization: Bearer $REGTOKEN"
+
+NEWBRANCH=$(curl -s -H "$REGAUTH" "$API/branches" | python -c "import sys,json; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
+check "$NEWBRANCH" "1" "signup creates the main branch"
+
+NEWLISTS=$(curl -s -H "$REGAUTH" "$API/pricing/lists" | python -c "import sys,json; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
+check "$NEWLISTS" "3" "signup seeds retail, wholesale and dealer rate lists"
+
+NEWUNITS=$(curl -s -H "$REGAUTH" "$API/units?limit=100" | python -c "import sys,json; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
+check "$NEWUNITS" "11" "signup seeds the units of measure"
+
+# A brand new business must not see the demo shop's catalogue.
+NEWPRODUCTS=$(curl -s -H "$REGAUTH" "$API/products" | python -c "import sys,json; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
+check "$NEWPRODUCTS" "0" "a new business starts with an empty catalogue, not the demo one"
+
+echo
 echo "=================================================="
 printf 'passed %s   failed %s\n' "$pass" "$fail"
 echo "=================================================="
