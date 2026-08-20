@@ -10,6 +10,7 @@
  * inventory explainable rather than merely numeric.
  */
 export const INVENTORY_TRANSACTION_TYPES = {
+  OPENING_STOCK: 'OPENING_STOCK',
   PURCHASE: 'PURCHASE',
   SALE: 'SALE',
   SALE_RETURN: 'SALE_RETURN',
@@ -18,11 +19,47 @@ export const INVENTORY_TRANSACTION_TYPES = {
   ADJUSTMENT: 'ADJUSTMENT',
   TRANSFER_OUT: 'TRANSFER_OUT',
   TRANSFER_IN: 'TRANSFER_IN',
-  OPENING_STOCK: 'OPENING_STOCK',
 } as const;
 
 export type InventoryTransactionType =
   (typeof INVENTORY_TRANSACTION_TYPES)[keyof typeof INVENTORY_TRANSACTION_TYPES];
+
+/** Movement types that add stock. Everything else removes it. */
+export const INBOUND_TRANSACTION_TYPES: readonly InventoryTransactionType[] = [
+  INVENTORY_TRANSACTION_TYPES.OPENING_STOCK,
+  INVENTORY_TRANSACTION_TYPES.PURCHASE,
+  INVENTORY_TRANSACTION_TYPES.SALE_RETURN,
+  INVENTORY_TRANSACTION_TYPES.TRANSFER_IN,
+];
+
+/**
+ * Why a stock figure was corrected by hand.
+ *
+ * Adjustments always carry a reason. Without a legitimate way to correct a
+ * count, staff invent illegitimate ones - such as ringing up a fake sale.
+ */
+export const ADJUSTMENT_REASONS = {
+  PHYSICAL_COUNT: 'PHYSICAL_COUNT',
+  DAMAGE: 'DAMAGE',
+  THEFT: 'THEFT',
+  EXPIRY: 'EXPIRY',
+  SAMPLE: 'SAMPLE',
+  DATA_ENTRY_ERROR: 'DATA_ENTRY_ERROR',
+  OTHER: 'OTHER',
+} as const;
+
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[keyof typeof ADJUSTMENT_REASONS];
+
+export const STOCK_TRANSFER_STATUSES = {
+  DRAFT: 'DRAFT',
+  /** Goods have left the source branch but not yet arrived. Belongs to neither. */
+  IN_TRANSIT: 'IN_TRANSIT',
+  RECEIVED: 'RECEIVED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type StockTransferStatus =
+  (typeof STOCK_TRANSFER_STATUSES)[keyof typeof STOCK_TRANSFER_STATUSES];
 
 export const PURCHASE_ORDER_STATUSES = {
   DRAFT: 'DRAFT',
@@ -66,18 +103,13 @@ export const INVOICE_STATUSES = {
 
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[keyof typeof INVOICE_STATUSES];
 
-export const STOCK_TRANSFER_STATUSES = {
-  DRAFT: 'DRAFT',
-  /** Goods have left the source branch but not yet arrived. Belongs to neither. */
-  IN_TRANSIT: 'IN_TRANSIT',
-  RECEIVED: 'RECEIVED',
-  CANCELLED: 'CANCELLED',
-} as const;
-
-export type StockTransferStatus =
-  (typeof STOCK_TRANSFER_STATUSES)[keyof typeof STOCK_TRANSFER_STATUSES];
-
-/** Default price lists seeded for a new organization. Owners may add more. */
+/**
+ * Default price lists seeded for a new organization.
+ *
+ * These three are what almost every Indian wholesale or retail shop already
+ * thinks in: counter rate, bulk rate, and the rate given to regular trade
+ * buyers. Owners may add more.
+ */
 export const DEFAULT_PRICE_LIST_CODES = {
   RETAIL: 'RETAIL',
   WHOLESALE: 'WHOLESALE',
@@ -102,3 +134,50 @@ export const MEMBERSHIP_STATUSES = {
 } as const;
 
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[keyof typeof MEMBERSHIP_STATUSES];
+
+/** How a user proved who they are. */
+export const AUTH_PROVIDERS = {
+  PASSWORD: 'PASSWORD',
+  GOOGLE: 'GOOGLE',
+} as const;
+
+export type AuthProvider = (typeof AUTH_PROVIDERS)[keyof typeof AUTH_PROVIDERS];
+
+/**
+ * Audited actions. Every entry records who, what, when, which organization,
+ * which entity, and where it matters the before and after values.
+ */
+export const AUDIT_ACTIONS = {
+  ORGANIZATION_CREATED: 'ORGANIZATION_CREATED',
+  ORGANIZATION_UPDATED: 'ORGANIZATION_UPDATED',
+  BRANCH_CREATED: 'BRANCH_CREATED',
+  BRANCH_UPDATED: 'BRANCH_UPDATED',
+  USER_CREATED: 'USER_CREATED',
+  USER_UPDATED: 'USER_UPDATED',
+  MEMBERSHIP_CREATED: 'MEMBERSHIP_CREATED',
+  MEMBERSHIP_UPDATED: 'MEMBERSHIP_UPDATED',
+  ROLE_CREATED: 'ROLE_CREATED',
+  ROLE_CHANGED: 'ROLE_CHANGED',
+  ROLE_DELETED: 'ROLE_DELETED',
+  CATEGORY_CREATED: 'CATEGORY_CREATED',
+  CATEGORY_UPDATED: 'CATEGORY_UPDATED',
+  BRAND_CREATED: 'BRAND_CREATED',
+  BRAND_UPDATED: 'BRAND_UPDATED',
+  UNIT_CREATED: 'UNIT_CREATED',
+  UNIT_UPDATED: 'UNIT_UPDATED',
+  PRODUCT_CREATED: 'PRODUCT_CREATED',
+  PRODUCT_UPDATED: 'PRODUCT_UPDATED',
+  PRODUCT_ARCHIVED: 'PRODUCT_ARCHIVED',
+  PRICE_LIST_CREATED: 'PRICE_LIST_CREATED',
+  PRICE_LIST_UPDATED: 'PRICE_LIST_UPDATED',
+  PRICE_CREATED: 'PRICE_CREATED',
+  PRICE_UPDATED: 'PRICE_UPDATED',
+  PRICE_DELETED: 'PRICE_DELETED',
+  INVENTORY_ADJUSTED: 'INVENTORY_ADJUSTED',
+  OPENING_STOCK_SET: 'OPENING_STOCK_SET',
+  STOCK_TRANSFER_CREATED: 'STOCK_TRANSFER_CREATED',
+  STOCK_TRANSFER_RECEIVED: 'STOCK_TRANSFER_RECEIVED',
+  STOCK_TRANSFER_CANCELLED: 'STOCK_TRANSFER_CANCELLED',
+} as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

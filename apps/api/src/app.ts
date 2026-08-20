@@ -2,7 +2,8 @@ import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { env } from './config/env';
+import cookieParser from 'cookie-parser';
+import { env, isProduction } from './config/env';
 import { API_PREFIX, JSON_BODY_LIMIT } from './core/constants';
 import { apiRouter } from './routes';
 import { errorHandler } from './middleware/errorHandler';
@@ -19,6 +20,7 @@ import { AppError } from './core/AppError';
  *   2. cors          - reject foreign origins before doing any work
  *   3. compression   - shrink responses
  *   4. body parsing  - with a size limit, so a huge payload is refused early
+ *   4b. cookies      - the refresh token lives in an httpOnly cookie
  *   5. logging       - every request gets a correlation id
  *   6. rate limiting - throttle before touching the database
  *   7. routes
@@ -37,12 +39,34 @@ export function createApp(): Express {
 
   app.use(helmet());
 
+  /**
+   * CORS.
+   *
+   * In production the allow-list is absolute: an origin either appears in
+   * CORS_ORIGINS or it is refused.
+   *
+   * In development any localhost port is accepted. Vite moves to another port
+   * whenever the configured one is busy, and having the API reject the dev
+   * server for that reason wastes far more time than the relaxation risks - a
+   * page served from localhost is already the developer's own machine.
+   */
+  const isLocalhostOrigin = (origin: string) =>
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
   app.use(
     cors({
       origin(origin, callback) {
         // Requests without an Origin header are server-to-server or curl, not a
         // browser, so the same-origin policy does not apply to them.
-        if (!origin || env.CORS_ORIGINS.includes(origin)) {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+        if (env.CORS_ORIGINS.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        if (!isProduction && isLocalhostOrigin(origin)) {
           callback(null, true);
           return;
         }
@@ -53,6 +77,9 @@ export function createApp(): Express {
   );
 
   app.use(compression());
+  // The refresh token travels in an httpOnly cookie, so cookies must be parsed
+  // before any route that reads it.
+  app.use(cookieParser());
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 

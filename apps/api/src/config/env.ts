@@ -25,7 +25,7 @@ const envSchema = z
 
     CORS_ORIGINS: z
       .string()
-      .default('http://localhost:5173')
+      .default('http://localhost:5173,http://localhost:5174')
       .transform((value) =>
         value
           .split(',')
@@ -40,13 +40,23 @@ const envSchema = z
     ACCESS_TOKEN_TTL: z.string().default('15m'),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 
+    /** Set only when the API and the web app are on different registrable domains. */
+    COOKIE_DOMAIN: z.string().optional(),
+
+    /**
+     * Google Sign-In. Optional: when the client id is absent the API simply
+     * reports that Google login is unavailable and password login still works.
+     * Nothing else in the system changes.
+     */
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+
+    /** Cloudinary. Optional: without it, product image upload is disabled. */
     CLOUDINARY_CLOUD_NAME: z.string().optional(),
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
 
-    LOG_LEVEL: z
-      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
-      .default('debug'),
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV !== 'production') return;
@@ -62,6 +72,14 @@ const envSchema = z
         });
       }
     }
+
+    if (value.JWT_ACCESS_SECRET === value.JWT_REFRESH_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['JWT_REFRESH_SECRET'],
+        message: 'The refresh secret must differ from the access secret',
+      });
+    }
   });
 
 const parsed = envSchema.safeParse(process.env);
@@ -70,7 +88,6 @@ if (!parsed.success) {
   const issues = parsed.error.issues
     .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
     .join('\n');
-  // eslint-disable-next-line no-console -- the logger does not exist yet at this point
   console.error(`\nInvalid environment configuration:\n${issues}\n`);
   process.exit(1);
 }
@@ -79,3 +96,11 @@ export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';
+
+/** Optional integrations report their own availability rather than crashing. */
+export const features = {
+  googleLogin: Boolean(env.GOOGLE_CLIENT_ID),
+  imageUpload: Boolean(
+    env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET,
+  ),
+};

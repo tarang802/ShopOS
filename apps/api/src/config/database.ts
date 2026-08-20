@@ -5,18 +5,31 @@ import { logger } from '../core/logger';
 /**
  * MongoDB connection management.
  *
- * Two global settings here are security and safety controls, not preferences:
- *
- * `sanitizeFilter` strips query operators that arrive inside user data. Without
- * it, a login body of { "email": { "$gt": "" } } matches the first user in the
- * collection. This is the MongoDB equivalent of SQL injection.
+ * `strictQuery` makes an unknown field in a filter an error rather than a silent
+ * no-op, so a typo in a query name fails loudly instead of returning everything.
  *
  * `autoIndex` is disabled in production. Mongoose otherwise tries to build every
  * declared index on boot, which on a large collection can lock up a live
  * database. Indexes in production are created deliberately, not on startup.
+ *
+ * ON QUERY-OPERATOR INJECTION, and why `sanitizeFilter` is deliberately NOT set:
+ *
+ * The attack it defends against is real - a login body of
+ * { "email": { "$gt": "" } } would otherwise match the first user in the
+ * collection. But ShopOS already blocks that one step earlier: every request
+ * body, query string and route parameter is parsed by a Zod schema before any
+ * service sees it, and `z.string()` rejects an object outright. Nothing that
+ * reaches a filter is unvalidated.
+ *
+ * Turning `sanitizeFilter` on as well would wrap EVERY object-valued filter in
+ * `$eq`, including the many legitimate ones the application builds itself -
+ * `{ _id: { $in: ids } }`, `{ quantity: { $gte: 5 } }`. Those would silently stop
+ * matching unless each was individually wrapped in `mongoose.trusted()`, and a
+ * forgotten wrapper produces a query that quietly returns nothing rather than an
+ * error. That failure mode is more dangerous here than the attack it prevents,
+ * given the input validation already in place.
  */
 mongoose.set('strictQuery', true);
-mongoose.set('sanitizeFilter', true);
 mongoose.set('autoIndex', !isProduction);
 
 export interface DatabaseCapabilities {

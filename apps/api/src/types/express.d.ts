@@ -1,3 +1,5 @@
+import type { TenantContext } from '../core/tenantContext';
+
 /**
  * Express request augmentation.
  *
@@ -17,6 +19,11 @@ declare global {
         query?: unknown;
         params?: unknown;
       };
+      /**
+       * Who is asking and what they may do. Set by authenticate(), derived from
+       * the session - never from the request body.
+       */
+      ctx?: TenantContext;
     }
   }
 }

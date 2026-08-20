@@ -1,73 +1,132 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState, type FormEvent } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import {
-  Activity,
+  ArrowLeftRight,
   Boxes,
   Building2,
-  FileBarChart,
+  ChevronDown,
+  History,
   LayoutDashboard,
+  LogOut,
+  Menu,
   Package,
-  Receipt,
   ScrollText,
+  Search,
   Settings,
   ShieldCheck,
-  ShoppingCart,
+  Store,
   Tags,
-  Truck,
   Users,
   Warehouse,
+  X,
 } from 'lucide-react';
+import { PERMISSIONS, type Permission } from '@shopos/shared';
+import { api } from '@/lib/apiClient';
+import { useAuthStore } from '@/stores/authStore';
+import { useBranches } from '@/hooks/useBranches';
+import { LABELS, type Label } from '@/lib/labels';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/field';
+import { queryClient } from '@/lib/queryClient';
 
 /**
- * The application shell: persistent sidebar, top bar, routed content.
+ * The application shell.
  *
- * The navigation mirrors how a shop is actually run - the operational modules
- * staff use all day sit at the top, and administration is separated below so it
- * is out of the way of daily work.
+ * Three things sit in the shell rather than on any one page, because they are
+ * needed from everywhere:
+ *
+ *  - The product search box. Looking up a rate is the single most frequent thing
+ *    anyone does in ShopOS, and making staff navigate to a page first would put
+ *    a click between them and a waiting customer.
+ *  - The branch selector. "Which godown are we talking about" is the second
+ *    question in almost every conversation in a multi-branch business.
+ *  - Who is signed in, and a way out.
+ *
+ * Navigation entries are filtered by permission, so an inventory hand simply
+ * never sees a Rates menu. That is a courtesy, not a security measure - the
+ * server refuses the request regardless.
  */
 
 interface NavItem {
   to: string;
-  label: string;
+  label: Label;
   icon: typeof LayoutDashboard;
+  permission?: Permission;
 }
 
 const OPERATIONS: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/products', label: 'Products', icon: Package },
-  { to: '/pricing', label: 'Pricing', icon: Tags },
-  { to: '/inventory', label: 'Inventory', icon: Warehouse },
-  { to: '/purchasing', label: 'Purchasing', icon: Truck },
-  { to: '/sales', label: 'Sales', icon: ShoppingCart },
-  { to: '/customers', label: 'Customers', icon: Users },
-  { to: '/suppliers', label: 'Suppliers', icon: Boxes },
-  { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { to: '/', label: LABELS.dashboard, icon: LayoutDashboard },
+  { to: '/products', label: LABELS.products, icon: Package, permission: PERMISSIONS.PRODUCTS_VIEW },
+  { to: '/rates', label: LABELS.rates, icon: Tags, permission: PERMISSIONS.PRICING_VIEW },
+  { to: '/stock', label: LABELS.stock, icon: Warehouse, permission: PERMISSIONS.INVENTORY_VIEW },
+  {
+    to: '/transfers',
+    label: LABELS.transfers,
+    icon: ArrowLeftRight,
+    permission: PERMISSIONS.INVENTORY_VIEW,
+  },
+  {
+    to: '/movements',
+    label: LABELS.movements,
+    icon: History,
+    permission: PERMISSIONS.INVENTORY_VIEW,
+  },
 ];
 
 const ADMINISTRATION: NavItem[] = [
-  { to: '/admin/users', label: 'Users', icon: Users },
-  { to: '/admin/roles', label: 'Roles', icon: ShieldCheck },
-  { to: '/admin/branches', label: 'Branches', icon: Building2 },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
-  { to: '/admin/audit-logs', label: 'Audit Logs', icon: ScrollText },
-  { to: '/admin/system', label: 'System Status', icon: Activity },
+  {
+    to: '/admin/branches',
+    label: LABELS.branches,
+    icon: Building2,
+    permission: PERMISSIONS.BRANCHES_VIEW,
+  },
+  { to: '/admin/staff', label: LABELS.staff, icon: Users, permission: PERMISSIONS.USERS_VIEW },
+  { to: '/admin/roles', label: LABELS.roles, icon: ShieldCheck, permission: PERMISSIONS.USERS_VIEW },
+  {
+    to: '/admin/settings',
+    label: LABELS.settings,
+    icon: Settings,
+    permission: PERMISSIONS.ORGANIZATION_MANAGE,
+  },
+  {
+    to: '/admin/activity',
+    label: LABELS.auditLog,
+    icon: ScrollText,
+    permission: PERMISSIONS.AUDIT_LOGS_VIEW,
+  },
 ];
 
-function NavSection({ title, items }: { title: string; items: NavItem[] }) {
+function NavSection({
+  title,
+  items,
+  permissions,
+  onNavigate,
+}: {
+  title: string;
+  items: NavItem[];
+  permissions: Permission[];
+  onNavigate: () => void;
+}) {
+  const visible = items.filter((item) => !item.permission || permissions.includes(item.permission));
+  if (visible.length === 0) return null;
+
   return (
     <div className="mb-6">
       <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </p>
       <nav className="flex flex-col gap-0.5">
-        {items.map(({ to, label, icon: Icon }) => (
+        {visible.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
+            onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors',
+                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
                 isActive
                   ? 'bg-accent font-medium text-accent-foreground'
                   : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
@@ -75,7 +134,8 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
             }
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            {label}
+            <span className="flex-1">{label.en}</span>
+            <span className="text-[11px] text-muted-foreground/70">{label.hi}</span>
           </NavLink>
         ))}
       </nav>
@@ -84,37 +144,175 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
 }
 
 export function AppShell() {
+  const navigate = useNavigate();
+  const session = useAuthStore((state) => state.session);
+  const clearSession = useAuthStore((state) => state.clearSession);
+  const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const setActiveBranch = useAuthStore((state) => state.setActiveBranch);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const permissions = session?.membership.permissions ?? [];
+  const { data: branches } = useBranches(permissions.includes(PERMISSIONS.BRANCHES_VIEW));
+
+  const logout = useMutation({
+    mutationFn: () => api.post('/auth/logout'),
+    onSettled: () => {
+      clearSession();
+      queryClient.clear();
+      navigate('/login', { replace: true });
+    },
+  });
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    const term = searchTerm.trim();
+    if (!term) return;
+    navigate(`/products?search=${encodeURIComponent(term)}`);
+  }
+
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      <div className="flex h-14 items-center gap-2 border-b border-border px-5">
+        <Store className="h-5 w-5 text-primary" aria-hidden />
+        <span className="text-base font-semibold tracking-tight">ShopOS</span>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-4">
+        <NavSection
+          title="Daily work"
+          items={OPERATIONS}
+          permissions={permissions}
+          onNavigate={() => setMenuOpen(false)}
+        />
+        <NavSection
+          title="Administration"
+          items={ADMINISTRATION}
+          permissions={permissions}
+          onNavigate={() => setMenuOpen(false)}
+        />
+      </div>
+      <div className="border-t border-border px-4 py-3">
+        <p className="truncate text-sm font-medium">{session?.organization.name}</p>
+        <p className="text-xs text-muted-foreground">{session?.membership.roleName}</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card lg:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-          <Receipt className="h-5 w-5 text-primary" aria-hidden />
-          <span className="text-base font-semibold tracking-tight">ShopOS</span>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 py-4">
-          <NavSection title="Operations" items={OPERATIONS} />
-          <NavSection title="Administration" items={ADMINISTRATION} />
-        </div>
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">
+        {sidebar}
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border px-6">
-          {/* Product search is the single most-used control in ShopOS, so it
-              lives in the shell rather than on one page. Wired up in Phase 6. */}
-          <input
-            type="search"
-            disabled
-            placeholder="Search products by name, SKU or barcode..."
-            className="h-9 w-full max-w-md rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground disabled:opacity-60"
-            aria-label="Search products"
+      {/* The sidebar becomes a drawer below the large breakpoint, because plenty
+          of shop staff will open this on a phone behind the counter. */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMenuOpen(false)}
           />
-          <span className="hidden text-xs text-muted-foreground sm:inline">Phase 1 skeleton</span>
+          <aside className="absolute left-0 top-0 h-full w-64 border-r border-border bg-card">
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            aria-label="Open menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+
+          <form onSubmit={submitSearch} className="relative min-w-0 flex-1 max-w-lg">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search product, item code or barcode..."
+              aria-label="Search products"
+              className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground"
+            />
+          </form>
+
+          {branches && branches.length > 1 && (
+            <Select
+              aria-label="Branch"
+              className="hidden h-9 w-44 sm:block"
+              value={activeBranchId ?? ''}
+              onChange={(event) => setActiveBranch(event.target.value || null)}
+            >
+              <option value="">All branches</option>
+              {branches.map((branch) => (
+                <option key={branch._id} value={branch._id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          )}
+
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={() => setUserMenuOpen((open) => !open)}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                {session?.user.name.charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden max-w-28 truncate sm:inline">{session?.user.name}</span>
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+            </Button>
+
+            {userMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close user menu"
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={() => setUserMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-11 z-20 w-56 rounded-md border border-border bg-popover p-1 shadow-lg">
+                  <div className="border-b border-border px-3 py-2">
+                    <p className="truncate text-sm font-medium">{session?.user.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{session?.user.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => logout.mutate()}
+                    className="mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-foreground hover:bg-accent"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
     </div>
   );
 }
+
+/** Re-exported so pages can show the same icon set without a second import. */
+export { Boxes };

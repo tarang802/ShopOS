@@ -26,10 +26,25 @@ export const paiseSchema = z
   .int('Amount must be a whole number of paise')
   .nonnegative('Amount cannot be negative');
 
-/** Physical quantities may be fractional (2.5 kg) but never absurdly precise. */
+/**
+ * Physical quantities may be fractional (2.5 kg of nails) but never absurdly
+ * precise, so three decimal places is the limit.
+ *
+ * Two variants exist because the rules differ by use: a counted stock figure may
+ * legitimately be zero, while a transfer line of zero units is a mistake.
+ */
+const threeDecimalPlaces = (value: number) => Number.isInteger(Math.round(value * 1000));
+
 export const quantitySchema = z
   .number()
   .finite()
-  .refine((n) => Number.isInteger(n * 1000), 'At most 3 decimal places');
+  .nonnegative('Quantity cannot be negative')
+  .refine(threeDecimalPlaces, 'At most 3 decimal places');
+
+export const positiveQuantitySchema = z
+  .number()
+  .finite()
+  .positive('Quantity must be more than zero')
+  .refine(threeDecimalPlaces, 'At most 3 decimal places');
 
 export const percentSchema = z.number().min(0).max(100);
