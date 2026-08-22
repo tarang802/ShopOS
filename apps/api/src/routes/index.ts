@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { auditRouter } from '../modules/audit/audit.routes';
+import { customersRouter } from '../modules/customers/customers.routes';
 import { authRouter } from '../modules/auth/auth.routes';
 import { branchesRouter } from '../modules/branches/branches.routes';
 import { brandsRouter, categoriesRouter, unitsRouter } from '../modules/catalog/catalog.routes';
@@ -9,6 +10,7 @@ import { inventoryRouter } from '../modules/inventory/inventory.routes';
 import { organizationsRouter } from '../modules/organizations/organizations.routes';
 import { pricingRouter } from '../modules/pricing/pricing.routes';
 import { productsRouter } from '../modules/products/products.routes';
+import { invoicesRouter } from '../modules/sales/invoices.routes';
 import { rolesRouter } from '../modules/roles/roles.routes';
 import { usersRouter } from '../modules/users/users.routes';
 
@@ -36,11 +38,13 @@ apiRouter.use('/products', productsRouter);
 apiRouter.use('/pricing', pricingRouter);
 apiRouter.use('/inventory', inventoryRouter);
 
+apiRouter.use('/customers', customersRouter);
+apiRouter.use('/invoices', invoicesRouter);
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/audit-logs', auditRouter);
 
 // Phase 9+  suppliers, purchases
-// Phase 10+ customers, quotations
-// Phase 11+ sales-orders, invoices
+// Phase 10+ quotations
+// Phase 11+ sales-orders
 // Phase 12+ payments
 // Phase 15+ reports

@@ -9,6 +9,8 @@ export * from './Branch';
 export * from './Brand';
 export * from './Category';
 export * from './Counter';
+export * from './Customer';
+export * from './Invoice';
 export * from './InventoryBalance';
 export * from './InventoryTransaction';
 export * from './Membership';
