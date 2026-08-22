@@ -37,6 +37,11 @@ export const LABELS = {
   roles: { en: 'Roles', hi: 'अधिकार' },
   settings: { en: 'Settings', hi: 'सेटिंग' },
   auditLog: { en: 'Activity Log', hi: 'गतिविधि' },
+  customers: { en: 'Customers', hi: 'ग्राहक' },
+  sales: { en: 'Sales', hi: 'बिक्री' },
+  suppliers: { en: 'Suppliers', hi: 'सप्लायर' },
+  purchases: { en: 'Purchase Orders', hi: 'खरीद ऑर्डर' },
+  payments: { en: 'Payments', hi: 'भुगतान' },
 
   // Common actions
   search: { en: 'Search', hi: 'खोजें' },

@@ -8,6 +8,8 @@ import { dashboardRouter } from '../modules/dashboard/dashboard.routes';
 import { healthRouter } from '../modules/health/health.routes';
 import { inventoryRouter } from '../modules/inventory/inventory.routes';
 import { organizationsRouter } from '../modules/organizations/organizations.routes';
+import { paymentsRouter } from '../modules/payments/payments.routes';
+import { purchaseOrdersRouter, suppliersRouter } from '../modules/purchasing/purchasing.routes';
 import { pricingRouter } from '../modules/pricing/pricing.routes';
 import { productsRouter } from '../modules/products/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
@@ -40,11 +42,15 @@ apiRouter.use('/inventory', inventoryRouter);
 
 apiRouter.use('/customers', customersRouter);
 apiRouter.use('/invoices', invoicesRouter);
+
+apiRouter.use('/suppliers', suppliersRouter);
+apiRouter.use('/purchase-orders', purchaseOrdersRouter);
+
+apiRouter.use('/payments', paymentsRouter);
+
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/audit-logs', auditRouter);
 
-// Phase 9+  suppliers, purchases
 // Phase 10+ quotations
-// Phase 11+ sales-orders
-// Phase 12+ payments
+// Phase 11+ sales-orders (invoices can already stand alone)
 // Phase 15+ reports

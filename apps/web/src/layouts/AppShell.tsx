@@ -11,12 +11,15 @@ import {
   LogOut,
   Menu,
   Package,
+  Receipt,
   ScrollText,
   Search,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Store,
   Tags,
+  Truck,
   Users,
   Warehouse,
   X,
@@ -73,6 +76,10 @@ const OPERATIONS: NavItem[] = [
     icon: History,
     permission: PERMISSIONS.INVENTORY_VIEW,
   },
+  { to: '/customers', label: LABELS.customers, icon: Users, permission: PERMISSIONS.CUSTOMERS_VIEW },
+  { to: '/sales', label: LABELS.sales, icon: Receipt, permission: PERMISSIONS.SALES_VIEW },
+  { to: '/suppliers', label: LABELS.suppliers, icon: Truck, permission: PERMISSIONS.SUPPLIERS_VIEW },
+  { to: '/purchases', label: LABELS.purchases, icon: ShoppingCart, permission: PERMISSIONS.PURCHASES_VIEW },
 ];
 
 const ADMINISTRATION: NavItem[] = [

@@ -19,6 +19,12 @@ import { RolesPage } from '@/features/admin/RolesPage';
 import { SettingsPage } from '@/features/admin/SettingsPage';
 import { ActivityPage } from '@/features/admin/ActivityPage';
 import { SystemStatusPage } from '@/pages/SystemStatusPage';
+import { CustomersPage } from '@/features/customers/CustomersPage';
+import { InvoicesPage } from '@/features/sales/InvoicesPage';
+import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
+import { SuppliersPage } from '@/features/purchasing/SuppliersPage';
+import { PurchaseOrdersPage } from '@/features/purchasing/PurchaseOrdersPage';
+import { PurchaseOrderDetailPage } from '@/features/purchasing/PurchaseOrderDetailPage';
 
 /**
  * Routing.
@@ -158,6 +164,55 @@ export function App() {
           element={
             <RequirePermission permission="inventory:view">
               <MovementsPage />
+            </RequirePermission>
+          }
+        />
+
+        <Route
+          path="customers"
+          element={
+            <RequirePermission permission="customers:view">
+              <CustomersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="sales"
+          element={
+            <RequirePermission permission="sales:view">
+              <InvoicesPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="sales/:id"
+          element={
+            <RequirePermission permission="sales:view">
+              <InvoiceDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="suppliers"
+          element={
+            <RequirePermission permission="suppliers:view">
+              <SuppliersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="purchases"
+          element={
+            <RequirePermission permission="purchases:view">
+              <PurchaseOrdersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="purchases/:id"
+          element={
+            <RequirePermission permission="purchases:view">
+              <PurchaseOrderDetailPage />
             </RequirePermission>
           }
         />

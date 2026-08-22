@@ -225,6 +225,91 @@ NEWPRODUCTS=$(curl -s -H "$REGAUTH" "$API/products" | python -c "import sys,json
 check "$NEWPRODUCTS" "0" "a new business starts with an empty catalogue, not the demo one"
 
 echo
+echo "=== 12. Purchasing: order, send, partial receipts ==="
+SUP=$(curl -s -X POST "$API/suppliers" -H "$AUTH" -H 'Content-Type: application/json' -d '{"name":"Rajesh Paper Traders","phone":"9800011122"}')
+SUPID=$(echo "$SUP" | python -c "import sys,json;print(json.load(sys.stdin)['data']['_id'])" 2>/dev/null)
+check "$([ -n "$SUPID" ] && echo yes || echo no)" "yes" "supplier created"
+
+PRE_PO=$(curl -s -H "$AUTH" "$API/products/$PID" | python -c "
+import sys,json
+d=json.load(sys.stdin)['data']['stock']
+print([s['quantity'] for s in d if s['branchName']=='Bhagalpur'][0])" 2>/dev/null)
+
+PO=$(curl -s -X POST "$API/purchase-orders" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"supplierId\":\"$SUPID\",\"items\":[{\"productId\":\"$PID\",\"orderedQty\":100,\"unitPricePaise\":350}]}")
+POID=$(echo "$PO" | python -c "import sys,json;print(json.load(sys.stdin)['data'].get('_id',''))" 2>/dev/null)
+POSTATUS=$(echo "$PO" | python -c "import sys,json;print(json.load(sys.stdin)['data'].get('status',''))" 2>/dev/null)
+check "$POSTATUS" "DRAFT" "purchase order created as DRAFT, no stock change"
+
+curl -s -X POST "$API/purchase-orders/$POID/send" -H "$AUTH" > /dev/null
+GR=$(curl -s -X POST "$API/purchase-orders/$POID/receive" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"items\":[{\"productId\":\"$PID\",\"receivedQty\":60}]}")
+GRSTATUS=$(echo "$GR" | python -c "import sys,json;print(json.load(sys.stdin)['data']['purchaseOrder']['status'])" 2>/dev/null)
+check "$GRSTATUS" "PARTIALLY_RECEIVED" "partial receipt sets PO to PARTIALLY_RECEIVED"
+
+POST_PO=$(curl -s -H "$AUTH" "$API/products/$PID" | python -c "
+import sys,json
+d=json.load(sys.stdin)['data']['stock']
+print([s['quantity'] for s in d if s['branchName']=='Bhagalpur'][0])" 2>/dev/null)
+EXPECT_PO=$((PRE_PO + 60))
+check "$POST_PO" "$EXPECT_PO" "stock increased by exactly the received quantity"
+
+OVERRECEIVE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/purchase-orders/$POID/receive" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"items\":[{\"productId\":\"$PID\",\"receivedQty\":9999}]}")
+check "$OVERRECEIVE" "422" "receiving more than outstanding is refused"
+
+echo
+echo "=== 13. Invoices: pricing, stock reduction, cancellation ==="
+CUST=$(curl -s -X POST "$API/customers" -H "$AUTH" -H 'Content-Type: application/json' -d '{"name":"Bansal Book Depot"}')
+CUSTID=$(echo "$CUST" | python -c "import sys,json;print(json.load(sys.stdin)['data']['_id'])" 2>/dev/null)
+check "$([ -n "$CUSTID" ] && echo yes || echo no)" "yes" "customer created"
+
+PRE_INV=$(curl -s -H "$AUTH" "$API/products/$PID" | python -c "
+import sys,json
+d=json.load(sys.stdin)['data']['stock']
+print([s['quantity'] for s in d if s['branchName']=='Bhagalpur'][0])" 2>/dev/null)
+
+INV=$(curl -s -X POST "$API/invoices" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"customerId\":\"$CUSTID\",\"items\":[{\"productId\":\"$PID\",\"quantity\":5}]}")
+INVID=$(echo "$INV" | python -c "import sys,json;print(json.load(sys.stdin)['data'].get('_id',''))" 2>/dev/null)
+UNITPRICE=$(echo "$INV" | python -c "import sys,json;print(json.load(sys.stdin)['data']['items'][0]['unitPricePaise'])" 2>/dev/null)
+check "$UNITPRICE" "500" "invoice line uses the resolved retail rate (qty 5 -> slab 1-9 -> 500 paise)"
+
+POST_INV=$(curl -s -H "$AUTH" "$API/products/$PID" | python -c "
+import sys,json
+d=json.load(sys.stdin)['data']['stock']
+print([s['quantity'] for s in d if s['branchName']=='Bhagalpur'][0])" 2>/dev/null)
+EXPECT_INV=$((PRE_INV - 5))
+check "$POST_INV" "$EXPECT_INV" "stock reduced by the invoiced quantity"
+
+curl -s -X POST "$API/invoices/$INVID/cancel" -H "$AUTH" -H 'Content-Type: application/json' -d '{}' > /dev/null
+RESTORED_INV=$(curl -s -H "$AUTH" "$API/products/$PID" | python -c "
+import sys,json
+d=json.load(sys.stdin)['data']['stock']
+print([s['quantity'] for s in d if s['branchName']=='Bhagalpur'][0])" 2>/dev/null)
+check "$RESTORED_INV" "$PRE_INV" "cancelling an invoice returns the stock it moved"
+
+TOOMUCH_INV=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/invoices" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"items\":[{\"productId\":\"$PID\",\"quantity\":999999}]}")
+check "$TOOMUCH_INV" "422" "invoicing more than in stock is refused"
+
+echo
+echo "=== 14. Payments: partial, full, overpayment refused ==="
+INV2=$(curl -s -X POST "$API/invoices" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"customerId\":\"$CUSTID\",\"items\":[{\"productId\":\"$PID\",\"quantity\":10}]}")
+INV2ID=$(echo "$INV2" | python -c "import sys,json;print(json.load(sys.stdin)['data']['_id'])" 2>/dev/null)
+INV2TOTAL=$(echo "$INV2" | python -c "import sys,json;print(json.load(sys.stdin)['data']['totalPaise'])" 2>/dev/null)
+HALF=$((INV2TOTAL / 2))
+
+curl -s -X POST "$API/payments" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"customerId\":\"$CUSTID\",\"amountPaise\":$HALF,\"method\":\"CASH\",\"allocations\":[{\"invoiceId\":\"$INV2ID\",\"amountPaise\":$HALF}]}" > /dev/null
+MIDSTATUS=$(curl -s -H "$AUTH" "$API/invoices/$INV2ID" | python -c "import sys,json;print(json.load(sys.stdin)['data']['status'])" 2>/dev/null)
+check "$MIDSTATUS" "PARTIALLY_PAID" "a partial payment moves the invoice to PARTIALLY_PAID"
+
+REMAINING=$((INV2TOTAL - HALF))
+curl -s -X POST "$API/payments" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"customerId\":\"$CUSTID\",\"amountPaise\":$REMAINING,\"method\":\"UPI\",\"allocations\":[{\"invoiceId\":\"$INV2ID\",\"amountPaise\":$REMAINING}]}" > /dev/null
+FINALSTATUS=$(curl -s -H "$AUTH" "$API/invoices/$INV2ID" | python -c "import sys,json;print(json.load(sys.stdin)['data']['status'])" 2>/dev/null)
+check "$FINALSTATUS" "PAID" "paying the remainder moves the invoice to PAID"
+
+OVERPAY=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/payments" -H "$AUTH" -H 'Content-Type: application/json'   -d "{\"branchId\":\"$B1\",\"customerId\":\"$CUSTID\",\"amountPaise\":100,\"method\":\"CASH\",\"allocations\":[{\"invoiceId\":\"$INV2ID\",\"amountPaise\":100}]}")
+check "$OVERPAY" "422" "allocating to an already-paid invoice is refused"
+
+CANCELPAID=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/invoices/$INV2ID/cancel" -H "$AUTH" -H 'Content-Type: application/json' -d '{}')
+check "$CANCELPAID" "422" "an invoice with payments recorded cannot be cancelled directly"
+
 echo "=================================================="
 printf 'passed %s   failed %s\n' "$pass" "$fail"
 echo "=================================================="
