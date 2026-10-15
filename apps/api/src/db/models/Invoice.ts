@@ -24,12 +24,23 @@ export interface IInvoiceItem {
   quantity: number;
   /** The rate actually charged, in paise, as resolved by the pricing engine at sale time. */
   unitPricePaise: number;
+  /** quantity x unitPricePaise, before any discount. */
+  grossPaise: number;
+  discountPercent: number;
+  discountPaise: number;
   taxRatePercent: number;
-  /** quantity x unitPricePaise, before tax. */
+  /** gross less discount, before tax. This is what tax is charged on. */
   subtotalPaise: number;
   taxPaise: number;
   /** subtotalPaise + taxPaise. */
   lineTotalPaise: number;
+  /**
+   * What one unit cost the business when this was sold, frozen like every other
+   * value on the line. Only ever shown to people holding `costs:view`.
+   */
+  unitCostPaise: number;
+  /** How much of this line the customer has sent back so far. */
+  returnedQty: number;
 }
 
 export interface IInvoice {
@@ -44,10 +55,22 @@ export interface IInvoice {
   status: InvoiceStatus;
   invoiceDate: Date;
   items: IInvoiceItem[];
+  /** Sum of line discounts. The subtotal is already net of it. */
+  discountPaise: number;
   subtotalPaise: number;
   taxPaise: number;
   totalPaise: number;
+  /** Total of payments applied. Moves only through the payments service. */
   paidPaise: number;
+  /** Value of goods sent back, credited against the bill. */
+  returnedPaise: number;
+  /** Cash given back after a return left the customer overpaid. */
+  refundedPaise: number;
+  /** When payment is expected: the invoice date plus the customer's credit days. */
+  dueDate: Date;
+  creditDays: number;
+  salesOrderId?: Types.ObjectId;
+  salesOrderNumber?: string;
   notes?: string;
   cancelledAt?: Date;
   cancelledBy?: Types.ObjectId;
@@ -66,10 +89,15 @@ const invoiceItemSchema = new Schema<IInvoiceItem>(
     unitSymbol: { type: String, required: true, maxlength: 12 },
     quantity: { type: Number, required: true, min: 0 },
     unitPricePaise: { type: Number, required: true, min: 0 },
+    grossPaise: { type: Number, required: true, default: 0, min: 0 },
+    discountPercent: { type: Number, required: true, default: 0, min: 0, max: 100 },
+    discountPaise: { type: Number, required: true, default: 0, min: 0 },
     taxRatePercent: { type: Number, required: true, default: 0, min: 0, max: 100 },
     subtotalPaise: { type: Number, required: true, min: 0 },
     taxPaise: { type: Number, required: true, min: 0 },
     lineTotalPaise: { type: Number, required: true, min: 0 },
+    unitCostPaise: { type: Number, required: true, default: 0, min: 0 },
+    returnedQty: { type: Number, required: true, default: 0, min: 0 },
   },
   { _id: false },
 );
@@ -97,10 +125,17 @@ const invoiceSchema = new Schema<IInvoice>(
         'An invoice needs between 1 and 500 lines',
       ],
     },
+    discountPaise: { type: Number, required: true, default: 0, min: 0 },
     subtotalPaise: { type: Number, required: true, min: 0 },
     taxPaise: { type: Number, required: true, min: 0 },
     totalPaise: { type: Number, required: true, min: 0 },
     paidPaise: { type: Number, required: true, default: 0, min: 0 },
+    returnedPaise: { type: Number, required: true, default: 0, min: 0 },
+    refundedPaise: { type: Number, required: true, default: 0, min: 0 },
+    dueDate: { type: Date, required: true, default: () => new Date() },
+    creditDays: { type: Number, required: true, default: 0, min: 0, max: 365 },
+    salesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder' },
+    salesOrderNumber: { type: String, trim: true, maxlength: 40 },
     notes: { type: String, trim: true, maxlength: 1000 },
     cancelledAt: { type: Date },
     cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -115,6 +150,9 @@ invoiceSchema.index({ organizationId: 1, number: 1 }, { unique: true });
 invoiceSchema.index({ organizationId: 1, branchId: 1, invoiceDate: -1 });
 invoiceSchema.index({ organizationId: 1, customerId: 1, invoiceDate: -1 });
 invoiceSchema.index({ organizationId: 1, status: 1, invoiceDate: -1 });
+// Overdue and aging queries: open invoices ordered by when they fell due.
+invoiceSchema.index({ organizationId: 1, status: 1, dueDate: 1 });
+invoiceSchema.index({ organizationId: 1, salesOrderId: 1 }, { sparse: true });
 
 invoiceSchema.plugin(tenantGuard);
 
