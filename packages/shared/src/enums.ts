@@ -98,6 +98,8 @@ export const INVOICE_STATUSES = {
   ISSUED: 'ISSUED',
   PARTIALLY_PAID: 'PARTIALLY_PAID',
   PAID: 'PAID',
+  /** Every line has been sent back. Nothing is owed and nothing was kept. */
+  RETURNED: 'RETURNED',
   CANCELLED: 'CANCELLED',
 } as const;
 

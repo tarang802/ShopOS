@@ -4,4 +4,5 @@ export * from './money';
 export * from './pagination';
 export * from './permissions';
 export * from './pricing';
+export * from './sales';
 export * from './validation';
