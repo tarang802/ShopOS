@@ -18,6 +18,7 @@ export * from './Supplier';
 export * from './InventoryBalance';
 export * from './InventoryTransaction';
 export * from './Membership';
+export * from './Migration';
 export * from './Organization';
 export * from './PriceList';
 export * from './Product';

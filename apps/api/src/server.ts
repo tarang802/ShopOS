@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
+import { runMigrations } from './db/migrations';
 import { logger } from './core/logger';
 import { API_PREFIX, APP_NAME, APP_VERSION } from './core/constants';
 
@@ -18,6 +19,7 @@ let server: Server | undefined;
 
 async function start(): Promise<void> {
   await connectDatabase();
+  await runMigrations();
 
   const app = createApp();
 
