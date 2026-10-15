@@ -128,3 +128,54 @@ export function agingBucket(dueDate: Date | string, now: Date = new Date()): Agi
   if (days <= 90) return 'D61_90';
   return 'D90_PLUS';
 }
+
+/**
+ * The last instant of the calendar day that `date` falls on, in a given timezone.
+ *
+ * A due date is a day, not a moment. An invoice due "today" is not late until
+ * today is over, so due dates are stored as the end of their day in the
+ * business's own timezone - otherwise a same-day bill turns overdue the second
+ * after it is written.
+ */
+export function endOfDayInTimeZone(date: Date, timeZone: string): Date {
+  const parts = (instant: Date) => {
+    const fields = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(instant);
+    const read = (type: string) => Number(fields.find((field) => field.type === type)?.value);
+    return {
+      year: read('year'),
+      month: read('month'),
+      day: read('day'),
+      hour: read('hour'),
+      minute: read('minute'),
+      second: read('second'),
+    };
+  };
+
+  const local = parts(date);
+  const wallClockAsUtc = Date.UTC(local.year, local.month - 1, local.day, 23, 59, 59, 999);
+
+  // How far the timezone sits from UTC at that moment, found by asking what the
+  // wall clock reads there and comparing it with the UTC reading.
+  const probe = parts(new Date(wallClockAsUtc));
+  const probeAsUtc = Date.UTC(
+    probe.year,
+    probe.month - 1,
+    probe.day,
+    probe.hour,
+    probe.minute,
+    probe.second,
+    999,
+  );
+  const offset = probeAsUtc - wallClockAsUtc;
+
+  return new Date(wallClockAsUtc - offset);
+}
