@@ -27,6 +27,7 @@ import {
 import { recordPaymentInSession } from '../payments/payments.service';
 import { resolvePrices } from '../pricing/pricing.service';
 import { presentInvoice } from './invoicePresenter';
+import { releaseOrderQuantities } from './salesOrderLedger';
 
 /**
  * Invoices - the event that moves stock and money.
@@ -607,6 +608,10 @@ export async function cancelInvoice(
         session,
       );
     }
+
+    // If this invoice billed part of a sales order, that quantity is waiting to be
+    // invoiced again.
+    await releaseOrderQuantities(ctx, invoice, session);
 
     await recordAudit(
       ctx,
