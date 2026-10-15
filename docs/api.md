@@ -66,7 +66,8 @@ whenever their token happens to expire.
 | 401 | Missing, invalid or expired authentication |
 | 403 | Authenticated but not permitted |
 | 404 | Does not exist, **or does not exist for this tenant** |
-| 409 | Conflict - duplicate item code, duplicate branch code |
+| 409 | Conflict - duplicate code, or the record changed while you were editing it |
+| 413 | Request body over the 1 MB limit |
 | 422 | Valid request that breaks a business rule |
 | 429 | Rate limited |
 | 500 | Unexpected server error |
@@ -91,7 +92,7 @@ Every list endpoint accepts the same parameters, defined once in
 
 | Scope | Limit |
 |---|---|
-| General | 300 requests / minute / IP |
+| General | 300 requests / minute / IP (raise with `GENERAL_RATE_LIMIT`) |
 | `/auth/login`, `/auth/register`, `/auth/google` | 10 per 15 min / IP, successes not counted |
 
 ---
@@ -243,6 +244,113 @@ than was sent, and the shortfall stays visible on the document.
 Insufficient stock returns 422 `INSUFFICIENT_STOCK` with the available and
 requested quantities in the message.
 
+## Customers
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/customers` | `customers:view` (`search`, `withBalance`) |
+| GET | `/customers/:id` | `customers:view` |
+| GET | `/customers/:id/summary` | `customers:view` |
+| GET | `/customers/:id/statement` | `customers:view` (`from`, `to`) |
+| POST | `/customers` | `customers:manage` |
+| PATCH | `/customers/:id` | `customers:manage` |
+
+The summary gives billed, paid, returned, outstanding, overdue, `refundDuePaise`
+and `netBalancePaise`. The statement is a dated ledger with a running balance and
+an opening balance for anything before `from`.
+
+## Sales documents
+
+Money is paise throughout.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/quotations`, `/quotations/:id` | `sales:view` | Status `EXPIRED` is derived from the date |
+| POST | `/quotations` | `sales:create` | |
+| PUT | `/quotations/:id` | `sales:update` | Drafts only |
+| POST | `/quotations/:id/send`, `/accept`, `/reject` | `sales:update` | Status transitions |
+| POST | `/quotations/:id/extend` | `sales:update` | New valid-until date |
+| POST | `/quotations/:id/convert-to-order` | `sales:create` | Once only |
+| POST | `/quotations/:id/convert-to-invoice` | `sales:create` | Once only |
+| GET | `/sales-orders`, `/sales-orders/:id` | `sales:view` | |
+| POST | `/sales-orders` | `sales:create` | |
+| PUT | `/sales-orders/:id` | `sales:update` | Drafts only |
+| POST | `/sales-orders/:id/confirm` | `sales:update` | |
+| POST | `/sales-orders/:id/cancel` | `sales:cancel` | |
+| POST | `/sales-orders/:id/invoice` | `sales:create` | Partial invoicing: send the lines and quantities |
+| GET | `/invoices`, `/invoices/:id` | `sales:view` | `status`, `customerId`, `overdue`, `outstandingOnly`, `from`, `to`, `q` |
+| POST | `/invoices` | `sales:create` | `items`, discounts, `creditDays`, optional pay-now |
+| POST | `/invoices/:id/cancel` | `sales:cancel` | Reverses stock; refused once paid |
+| GET | `/sales-returns`, `/sales-returns/:id` | `sales:view` | |
+| POST | `/sales-returns` | `sales:return` | Against one invoice; may include a refund |
+
+Line items carry `productId`, `quantity` and optionally `discountPercent`; the rate
+comes from the pricing engine for the quantity, never from the client. Fields not
+declared by the schema (`paidPaise`, `status`, `organizationId`) are ignored.
+
+## Payments
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/payments` | `payments:view` (`customerId`, `method`, `status`, `from`, `to`, `q`) |
+| GET | `/payments/outstanding-invoices` | `payments:view` |
+| GET | `/payments/:id` | `payments:view` |
+| POST | `/payments` | `payments:create` |
+| POST | `/payments/:id/void` | `payments:void` (`reason`) |
+
+## Suppliers and purchasing
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/suppliers` | `suppliers:view` |
+| GET | `/suppliers/:id/summary` | `suppliers:view` |
+| GET | `/suppliers/:id/statement` | `suppliers:view` |
+| POST | `/suppliers` | `suppliers:manage` |
+| PATCH | `/suppliers/:id` | `suppliers:manage` |
+| GET | `/purchase-orders`, `/purchase-orders/:id` | `purchases:view` |
+| POST | `/purchase-orders` | `purchases:create` |
+| POST | `/purchase-orders/:id/send` | `purchases:update` |
+| POST | `/purchase-orders/:id/cancel` | `purchases:update` |
+| POST | `/purchase-orders/:id/receive` | `purchases:receive` |
+| GET | `/purchase-returns`, `/purchase-returns/:id` | `purchases:view` |
+| POST | `/purchase-returns` | `purchases:return` |
+| GET | `/supplier-payments`, `/supplier-payments/:id` | `purchases:view` |
+| GET | `/supplier-payments/payable-orders` | `purchases:view` |
+| POST | `/supplier-payments` | `purchases:pay` |
+| POST | `/supplier-payments/:id/void` | `purchases:pay` |
+
+Receiving more than is outstanding returns 422. Returns and payments are bounded
+by what was received and what is owed.
+
+## Notifications
+
+Signed-in users only; each person sees what their permissions allow.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/notifications` | Paginated |
+| GET | `/notifications/summary` | Unread count, for the bell |
+| POST | `/notifications/:id/read` | |
+| POST | `/notifications/read-all` | |
+
+## Reports
+
+Need `reports:view`. `GET /reports` lists what the caller may run;
+`GET /reports/:key` runs one. Add `format=csv` for a download.
+
+| Key | Filters | Notes |
+|---|---|---|
+| `sales-summary` | period, branch, `groupBy` day / month / product / customer / branch | Margin only with `costs:view` |
+| `tax-summary` | period, branch | Tax by rate, after returns |
+| `collections` | period, branch, `groupBy` method / day / branch | |
+| `receivables-aging` | branch | Who owes us, by lateness |
+| `payables-aging` | branch | Whom we owe |
+| `purchases-summary` | period, branch, `groupBy` month / day / supplier / branch | |
+| `stock-valuation` | branch, `groupBy` product / branch / category | Needs `costs:view` |
+| `reorder` | branch | At or below reorder level |
+
+A report is `{ key, title, columns: [{ key, label, type }], rows, totals, period }`.
+
 ## Dashboard and audit
 
 | Method | Path | Permission |
@@ -250,9 +358,9 @@ requested quantities in the message.
 | GET | `/dashboard` | `products:view` |
 | GET | `/audit-logs` | `audit_logs:view` |
 
+The dashboard returns today's and the month's sales and collections, a 14-day
+trend, receivables and payables with overdue amounts, low stock, top products,
+recent invoices and what needs attention. Parts the caller may not see (payables,
+cost, margin) are omitted or null rather than zero.
+
 The audit log has no create, update or delete route, and never will.
-
-## Not built yet
-
-Suppliers, purchase orders, goods receipts, customers, quotations, sales orders,
-invoices, payments and reports - phases 9 to 15.

@@ -23,7 +23,7 @@ startup, logs a warning when they are unavailable, and shows it on
 
 ## Collections
 
-### Built (18)
+### Built (32)
 
 **Tenancy and identity**
 
@@ -66,11 +66,37 @@ startup, logs a warning when they are unavailable, and shows it on
 |---|---|
 | `audit_logs` | Who changed what, and what it was before |
 
-### Planned
+**Purchasing**
 
-`suppliers`, `purchase_orders`, `goods_receipts`, `customers`, `quotations`,
-`sales_orders`, `invoices`, `credit_notes`, `payments`, `notifications`,
-`idempotency_keys`, `daily_sales_rollups`.
+| Collection | Purpose |
+|---|---|
+| `suppliers` | Who we buy from, with credit terms |
+| `purchaseorders` | Orders, with embedded lines and received quantities |
+| `goodsreceipts` | Each delivery received against an order |
+| `purchasereturns` | Goods sent back to a supplier |
+| `supplierpayments` | Money paid, allocated to orders; voidable |
+
+**Sales**
+
+| Collection | Purpose |
+|---|---|
+| `customers` | Who we sell to, with credit terms and limit |
+| `quotations` | Offers; expire by date |
+| `salesorders` | Promises; may be invoiced in parts |
+| `invoices` | The event that moves stock and money. Lines freeze rate, discount, tax and cost |
+| `salesreturns` | Goods taken back against one invoice |
+| `payments` | Money received, allocated to invoices; voidable |
+
+**Platform (continued)**
+
+| Collection | Purpose |
+|---|---|
+| `notifications` | Alerts, with per-user read state and a dedupe key. Expire after 60 days |
+| `migrations` | Which one-off data migrations have run |
+
+Not built: `credit_notes` (a sales return covers it), `idempotency_keys`, and
+`daily_sales_rollups` (reports aggregate on demand, which is fast enough at shop
+scale).
 
 Payment methods stay an organization setting rather than a collection - it is
 configuration, and a collection would add a lookup to every payment read.

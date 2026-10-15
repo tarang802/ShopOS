@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# End-to-end smoke test of the ShopOS API, phases 3 through 8.
+# End-to-end smoke test of the ShopOS API: sign-up and access, catalogue, pricing,
+# inventory, purchasing, invoices and payments.
 #
 # The checks assert exact stock figures, and the test itself moves stock, so it
 # is NOT idempotent - running it twice without reseeding fails on the inventory
@@ -19,7 +20,7 @@ check() {
 
 # Fail fast when the API is not running at all. Without this, every check
 # reports a confusing "got=000" - curl's code for "could not connect" - and it
-# looks like 36 broken features rather than one stopped server.
+# looks like dozens of broken features rather than one stopped server.
 if ! curl -s -o /dev/null --max-time 5 "$API/health"; then
   echo
   echo "  The API is not responding at $API"

@@ -42,26 +42,34 @@ apps/api/src/
   config/       env, database, cloudinary
   core/         AppError, http helpers, logger, tenant context, list queries
   db/
-    models/     18 Mongoose models
+    models/     32 Mongoose models
+    migrations.ts  one-off data migrations, run at boot
     plugins/    tenantGuard
     transaction.ts
   middleware/   authenticate, requirePermission, validate, errorHandler, rateLimiter
-  modules/      auth, organizations, branches, users, roles, catalog,
-                products, pricing, inventory, dashboard, audit, health
-  services/     tokenService, inventoryService, auditService, counterService,
-                organizationBootstrap
+  modules/      auth, organizations, branches, users, roles, catalog, products,
+                pricing, inventory, customers, sales (quotations, orders, invoices,
+                returns), payments, purchasing (orders, returns, supplier payments),
+                reports, notifications, dashboard, audit, health
+  services/     tokenService, inventoryService, costingService, receivablesService,
+                payablesService, statementService, notificationService,
+                auditService, counterService, organizationBootstrap
+  jobs/         hourly overdue sweep (JOBS_ENABLED)
+  test/         integration specs against a real replica-set database
   seed/         demo data
 
 apps/web/src/
-  components/   ui primitives, PageHeader
-  features/     auth, dashboard, products, pricing, inventory, admin
+  components/   ui primitives, PageHeader, DocumentList, StatementTable, charts
+  features/     auth, dashboard, products, pricing, inventory, customers, sales,
+                purchasing, payments, notifications, reports, admin
   hooks/        useBranches
   layouts/      AppShell
   lib/          apiClient, format, labels, queryClient, utils
   stores/       authStore
 
 packages/shared/src/
-  api, enums, money, pagination, permissions, pricing, validation
+  api, enums, money, pagination, permissions, pricing, sales, purchasing,
+  validation, __tests__
 ```
 
 `packages/shared` is consumed as TypeScript source, not as a built package. The
@@ -89,7 +97,7 @@ Isolation is enforced three ways, deepest first:
 3. Every client-supplied reference is re-validated as belonging to the caller's
    business before use.
 
-## The three engines
+## The engines
 
 ### Pricing
 
@@ -112,6 +120,42 @@ always be reproducible from the ledger.
 All of it goes through `applyMovement`, the only function in the system that
 writes to `inventory_balances`. Decrements use a single conditional atomic update
 so two simultaneous sales of the last unit cannot both succeed.
+
+### Money
+
+Amounts are integer paise. The arithmetic that must agree on both sides - a line's
+discount and tax, proportional credit for a partial return, what a customer or
+supplier still owes, invoice status, days late, ageing buckets, calendar ranges in
+the shop's timezone - lives in `packages/shared/src/{money,sales,purchasing}.ts`
+as pure functions with their own tests.
+
+Balances (`paidPaise`, `returnedPaise`, `refundedPaise`) are changed only with a
+**compare-and-swap**: a conditional `updateOne` that names the figure that was
+read. If somebody else changed it first the update matches nothing and the caller
+retries or is told, so two cashiers cannot both settle the same bill. Multi-document
+changes run in a transaction (`db/transaction.ts`).
+
+### Documents
+
+Quotation, sales order, invoice, return and payment share line and total helpers
+(`documentLines`, `documentTotals`). Every line stores what was true when it was
+written, so a document never changes when a product or price does. Conversions
+(quotation to order or invoice, order to invoice) are *claimed* with a conditional
+update first, then performed, so a double click cannot make two.
+
+### Statements and reports
+
+Statements are built from the documents themselves (`buildStatement`), and the
+summary figures come from the same queries, so the two cannot disagree. Reports are
+aggregations that begin with `$match` on the organization and branch scope - the
+same rule the tenant guard enforces for ordinary queries - and return typed columns
+so one renderer serves the screen, print and CSV.
+
+### Notifications
+
+`notificationService` raises alerts from the places that cause them (stock changes,
+the hourly sweep). A unique `dedupeKey` makes raising idempotent, and read state is
+a per-user set on the notification.
 
 ### Authorization
 
@@ -174,9 +218,21 @@ Decided with the product owner:
 - Batch and expiry tracking, and serial/IMEI tracking.
 - Unit conversion between purchase and stock units.
 
-## Next
+## Testing
 
-Phase 9 onwards: suppliers and purchase orders, goods receipts feeding the same
-`applyMovement`, then customers, quotations, sales orders, invoices and payments.
-Invoices will store the commercial values used at the time, so changing a rate
-today can never rewrite the past.
+- `packages/shared`: unit tests for money, pricing slabs, document arithmetic,
+  ageing, calendar ranges and payables.
+- `apps/api`: integration tests start the real Express app on an ephemeral port
+  against a throwaway MongoDB replica-set database (`shopos_test`, dropped before
+  each run) and register fresh businesses through the public API, so every test also
+  proves tenant isolation. Covered: tenancy, inventory, sales, purchasing, reports
+  and security, plus unit tests for costing, CSV and statements.
+- `apps/web`: unit tests for the formatting and parsing helpers.
+- `scripts/smoke-test.sh`: 56 checks against a running server and the demo data.
+
+## Deployment shape
+
+One API process (Express, Mongoose) and static web assets. In `docker-compose.yml`
+nginx serves the web build and forwards `/api` to the API, so the browser sees one
+origin. MongoDB must be a replica set. Only one API instance should run the
+background jobs (`JOBS_ENABLED`).

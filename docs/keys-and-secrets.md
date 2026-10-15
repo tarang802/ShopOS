@@ -140,6 +140,8 @@ put a secret, an API secret or a database URI behind a `VITE_` name.
 | `VITE_GOOGLE_CLIENT_ID` | No | Google button hidden |
 | `CORS_ORIGINS` | Production | Browser calls refused |
 | `COOKIE_DOMAIN` | Only across domains | Sign-in fails across domains |
+| `JOBS_ENABLED` | No | Overdue reminders stop when false (default true) |
+| `TEST_MONGODB_URI` | Tests only | Tests use the local replica set on port 27018 |
 
 ## Rotating a secret
 

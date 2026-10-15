@@ -3,8 +3,9 @@
 The rules the system enforces. Nothing here is enforced by the frontend alone -
 every one of them is checked on the server.
 
-Rules marked **[built]** are implemented and covered by `npm run smoke`.
-The rest arrive with phases 9 to 12.
+Every rule here is implemented. The integration specs in `apps/api/src/test` and the
+arithmetic specs in `packages/shared/src/__tests__` assert them against the real
+app, and `npm run smoke` walks the main flows end to end.
 
 ## Pricing **[built]**
 
@@ -38,13 +39,27 @@ The rest arrive with phases 9 to 12.
 each resolve to the correct slab; overlapping slabs, gaps and a card that does not
 start at 1 are all refused with 422; a quantity of zero is refused.
 
-## Historical values are frozen (phases 9 to 12)
+## Money
+
+1. Every amount is an **integer number of paise**. There is no floating-point
+   rupee anywhere in storage, arithmetic or the API.
+2. A line is worked out in one order everywhere (`computeLineAmounts`, shared by
+   server and browser): gross = rate x quantity, less the discount, then tax on
+   what is left.
+3. When part of a line is returned, the credit is the *cumulative* proportional
+   share of the line total, minus what was already credited, so the pieces always
+   add up to the whole whatever the rounding.
+4. Dates that mean "a day" (due dates, report ranges, list filters) are calendar
+   days in the **shop's timezone**, not UTC. A bill raised at 11 pm on the 31st is
+   in that month.
+
+## Historical values are frozen **[built]**
 
 If a product costs Rs 10 today but an invoice from six months ago charged Rs 8,
 that invoice shows Rs 8 forever.
 
 - Every document line stores the commercial values used at the time: product
-  name, SKU, unit, unit price, discount, tax rate and line total.
+  name, SKU, unit, unit price, discount, tax rate, line total and the unit cost.
 - Displaying a historical document **never** reads the current product price.
 - Renaming or repricing a product does not alter any document already written.
 
@@ -71,35 +86,108 @@ and records who and why; a transfer removes from the source, leaves the
 destination unchanged while in transit, and adds on receipt; sending more than is
 in stock is refused with 422; every movement appears in the ledger.
 
-Still to cover with automated tests (Phase 16): concurrent decrements under real
-parallel load, and the negative-stock setting in both positions.
+`inventory.test.ts` also fires parallel sales at the last units and asserts exactly
+the available quantity is sold, and exercises the negative-stock setting both ways.
+Low-stock and out-of-stock alerts are raised from `applyMovement`, so no route can
+change stock without them.
 
-## Purchasing (phase 9)
+## Costs and margin **[built]**
+
+1. A product's cost is a **moving average**: each goods receipt weights what was
+   already on hand against what just arrived. It is worked out *before* the stock
+   is increased, otherwise the new goods would be counted twice.
+2. Each invoice line freezes the cost at the moment of sale, so a later purchase
+   never rewrites a past margin.
+3. Cost, margin and stock value are visible only with `costs:view`. Everyone else
+   receives responses that do not contain the fields at all.
+
+## Purchasing **[built]**
 
 1. A purchase order is a commitment. It **does not** change stock.
 2. Stock increases only on a goods receipt.
 3. Receipts may be partial and repeated: order 1000, receive 700 now (stock +700),
-   receive 300 later (stock +300).
+   receive 300 later (stock +300). Receiving more than is outstanding is refused.
 4. Status follows receipts: `DRAFT -> SENT -> PARTIALLY_RECEIVED -> RECEIVED`.
-5. Receiving more than the outstanding quantity is refused.
+5. **What we owe a supplier is what has been delivered**, not what was ordered:
+   value received, less goods returned, less payments made.
+6. A supplier payment is allocated to purchase orders and bounded by what may still
+   be paid. A deposit before delivery is allowed up to the order total.
+7. Credit terms give each order a due date (end of that day in the shop's
+   timezone). Payment status is `UNPAID`, `PARTIALLY_PAID` or `PAID`.
+8. Goods sent back reduce stock and the amount owed. If the supplier was paid more
+   than the reduced order is worth, the surplus shows as credit due from them.
+9. A supplier payment is voided, never deleted, with a reason.
 
-## Sales (phases 10 to 11)
+## Sales **[built]**
 
 1. Stages are not compulsory. A walk-in customer goes straight to an invoice; a
    B2B customer may go quotation, sales order, invoice, payment.
-2. A quotation is an offer. A sales order is a promise. **The invoice is the
-   event that moves stock and money.**
-3. A sales order may be invoiced in parts.
-4. Invoices are not deleted. They are cancelled, and a cancellation reverses the
-   stock it moved.
+2. A quotation is an offer and a sales order is a promise. Neither moves stock or
+   money. **The invoice is the event that does.**
+3. Quotations expire at the end of their valid-until day; "expired" is derived from
+   the date, not stored, so it can never be stale. An expired quotation can be
+   extended but not converted.
+4. A quotation converts to an order or straight to an invoice exactly once, claimed
+   with a conditional update so two clicks cannot create two documents.
+5. A sales order may be invoiced in parts. What remains to invoice is derived from
+   the invoices raised against it.
+6. Discounts above the organization's threshold need the discount permission.
+7. With credit-limit enforcement on, an invoice that would take a customer past
+   their limit is refused.
+8. An invoice may take payment at the till ("pay now"), which is recorded exactly
+   as a separate payment would be.
+9. Invoices are not deleted. They are cancelled, and a cancellation reverses the
+   stock it moved. An invoice with payments recorded cannot be cancelled directly.
 
-## Payments (phase 12)
+## Returns and refunds **[built]**
+
+1. A return is against one invoice and takes back at most what was sold less what
+   was already returned.
+2. Returned stock goes back on the shelf through the ledger (`SALE_RETURN`).
+3. The credit reduces the invoice's outstanding amount. Where the customer has
+   already paid more than the reduced invoice, the excess is **refund due**.
+4. A refund is bounded by refund due and recorded against the invoice; it can never
+   exceed what has been paid and returned.
+5. Credit is a whole-paise cumulative share, so several partial returns of one line
+   sum exactly to the line total.
+
+## Payments **[built]**
 
 1. A payment is recorded against a customer and allocated across one or more
-   invoices.
-2. Invoice `paidAmount` and outstanding balance are derived from allocations, not
-   typed in by hand.
+   invoices; unallocated money is refused rather than parked.
+2. Invoice `paidPaise`, outstanding balance and status are derived from payments,
+   never typed in by hand.
 3. Allocating more than an invoice's outstanding amount is refused.
+4. Balances change with a compare-and-swap on the figure that was read, so two
+   people recording against the same invoice cannot both succeed past the total.
+5. A payment is **voided**, not deleted: a reason is recorded, the allocation is
+   reversed and the invoice status re-derived.
+
+## Receivables and statements **[built]**
+
+1. A customer's balance is invoices, less payments, less returns, plus refunds
+   paid. The statement and the summary come from the same figures and must agree;
+   `refundDuePaise` and `netBalancePaise` expose the sign-flipped case.
+2. Ageing buckets are current, 1-30, 31-60, 61-90 and over 90 days late. A bill is
+   one day late the morning after its due day, not zero.
+3. Supplier statements work the same way with the roles reversed.
+
+## Notifications **[built]**
+
+1. Low stock, out of stock, overdue invoices, bills falling due, incoming transfers
+   and expiring quotations raise notifications for people who hold the relevant permission.
+2. Each carries a dedupe key, so a condition is announced once until it clears, not
+   every hour.
+3. Read state is per user. An hourly job sweeps for overdue items; set
+   `JOBS_ENABLED=false` on all but one API instance.
+
+## Reports **[built]**
+
+1. Reports take a period (a calendar range in the shop's timezone, at most three
+   years) and, where it makes sense, a branch, and respect the caller's branches.
+2. Margin and stock valuation require `costs:view`.
+3. Every report can be exported as CSV. Text cells that start with `=`, `+`, `-` or
+   `@` are prefixed so a spreadsheet reads them as text, not a formula.
 
 ## Authorization **[built]**
 
