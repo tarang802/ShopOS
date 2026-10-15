@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, IndianRupee, Printer } from 'lucide-react';
+import { ArrowLeft, Ban, Banknote, IndianRupee, Printer, Undo2 } from 'lucide-react';
 import { PERMISSIONS } from '@shopos/shared';
 import { useHasPermission } from '@/stores/authStore';
 import { ApiRequestError } from '@/lib/apiClient';
@@ -15,6 +15,8 @@ import { ErrorState, Skeleton } from '@/components/ui/states';
 import { useCancelInvoice, useInvoice } from './invoicesApi';
 import { RecordPaymentDialog } from '../payments/RecordPaymentDialog';
 import { useVoidPayment } from '../payments/paymentsApi';
+import { RefundDialog } from './RefundDialog';
+import { ReturnGoodsDialog } from './ReturnGoodsDialog';
 
 /**
  * One invoice, exactly as it was created.
@@ -30,6 +32,7 @@ export function InvoiceDetailPage() {
   const canCancel = useHasPermission(PERMISSIONS.SALES_CANCEL);
   const canRecordPayment = useHasPermission(PERMISSIONS.PAYMENTS_CREATE);
   const canVoid = useHasPermission(PERMISSIONS.PAYMENTS_VOID);
+  const canReturn = useHasPermission(PERMISSIONS.SALES_RETURN);
 
   const { data: invoice, isPending, isError, error, refetch } = useInvoice(id);
   const cancelInvoice = useCancelInvoice();
@@ -37,6 +40,8 @@ export function InvoiceDetailPage() {
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [voiding, setVoiding] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -62,6 +67,9 @@ export function InvoiceDetailPage() {
   const canPay = invoice.outstandingPaise > 0 && invoice.status !== 'CANCELLED';
   const canCancelNow =
     invoice.status !== 'CANCELLED' && invoice.paidPaise === 0 && (invoice.returnedPaise ?? 0) === 0;
+  const canReturnNow =
+    invoice.status !== 'CANCELLED' && invoice.items.some((line) => line.quantity - (line.returnedQty ?? 0) > 0);
+  const lastReturn = invoice.returns[invoice.returns.length - 1];
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -98,6 +106,18 @@ export function InvoiceDetailPage() {
             <Button onClick={() => setPayOpen(true)}>
               <IndianRupee className="h-4 w-4" aria-hidden />
               Record payment
+            </Button>
+          )}
+          {canReturn && canReturnNow && (
+            <Button variant="outline" onClick={() => setReturnOpen(true)}>
+              <Undo2 className="h-4 w-4" aria-hidden />
+              Return goods
+            </Button>
+          )}
+          {canReturn && invoice.refundDuePaise > 0 && lastReturn && (
+            <Button variant="outline" onClick={() => setRefundOpen(true)}>
+              <Banknote className="h-4 w-4" aria-hidden />
+              Refund customer
             </Button>
           )}
           {canCancel && canCancelNow && (
@@ -298,6 +318,17 @@ export function InvoiceDetailPage() {
         customerName={invoice.customerName}
         outstandingPaise={invoice.outstandingPaise}
       />
+
+      {canReturn && <ReturnGoodsDialog open={returnOpen} onOpenChange={setReturnOpen} invoice={invoice} />}
+      {lastReturn && (
+        <RefundDialog
+          open={refundOpen}
+          onOpenChange={setRefundOpen}
+          returnId={lastReturn._id}
+          customerName={invoice.customerName}
+          refundDuePaise={invoice.refundDuePaise}
+        />
+      )}
 
       <ReasonDialog
         open={cancelOpen}
