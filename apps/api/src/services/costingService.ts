@@ -53,16 +53,16 @@ export async function applyReceiptCost(
 ): Promise<number> {
   const opts = sessionOption(session);
 
-  const [product, onHand] = await Promise.all([
-    Product.findOne({ ...orgFilter(ctx), _id: input.productId })
-      .select('+costPricePaise')
-      .setOptions(opts)
-      .lean(),
-    InventoryBalance.aggregate<{ quantity: number }>([
-      { $match: { ...orgFilter(ctx), productId: input.productId } },
-      { $group: { _id: null, quantity: { $sum: '$quantity' } } },
-    ]).session(session ?? null),
-  ]);
+  // Sequential on purpose: this runs inside the receipt's transaction, and two
+  // concurrent operations on one session are rejected by MongoDB.
+  const product = await Product.findOne({ ...orgFilter(ctx), _id: input.productId })
+    .select('+costPricePaise')
+    .setOptions(opts)
+    .lean();
+  const onHand = await InventoryBalance.aggregate<{ quantity: number }>([
+    { $match: { ...orgFilter(ctx), productId: input.productId } },
+    { $group: { _id: null, quantity: { $sum: '$quantity' } } },
+  ]).session(session ?? null);
 
   const cost = movingAverageCost({
     onHandQty: onHand[0]?.quantity ?? 0,

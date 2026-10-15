@@ -3,12 +3,21 @@ import {
   AUDIT_ACTIONS,
   INVENTORY_TRANSACTION_TYPES,
   PURCHASE_ORDER_STATUSES,
+  endOfDayInTimeZone,
   multiplyPaise,
   sumPaise,
   toSkip,
   type PaginationQuery,
 } from '@shopos/shared';
-import { Branch, GoodsReceipt, Product, PurchaseOrder, Supplier } from '../../db/models';
+import {
+  Branch,
+  GoodsReceipt,
+  Organization,
+  Product,
+  PurchaseOrder,
+  Supplier,
+  SupplierPayment,
+} from '../../db/models';
 import { AppError } from '../../core/AppError';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { sessionOption, withTransaction } from '../../db/transaction';
@@ -16,6 +25,7 @@ import { applyMovement } from '../../services/inventoryService';
 import { applyReceiptCost } from '../../services/costingService';
 import { nextDocumentNumber } from '../../services/counterService';
 import { recordAudit } from '../../services/auditService';
+import { presentPurchaseOrder } from './purchaseOrderPresenter';
 
 /** Quantities carry up to three decimals, so comparisons allow for float noise. */
 const QUANTITY_EPSILON = 1e-9;
@@ -75,6 +85,7 @@ export async function createPurchaseOrder(ctx: TenantContext, input: CreatePurch
       unitSymbol: product.unitSymbol,
       orderedQty: item.orderedQty,
       receivedQty: 0,
+      returnedQty: 0,
       unitPricePaise: item.unitPricePaise,
       lineTotalPaise: multiplyPaise(item.unitPricePaise, item.orderedQty),
     };
@@ -95,6 +106,7 @@ export async function createPurchaseOrder(ctx: TenantContext, input: CreatePurch
           status: PURCHASE_ORDER_STATUSES.DRAFT,
           items,
           totalPaise: sumPaise(items.map((i) => i.lineTotalPaise)),
+          creditDays: supplier.creditDays ?? 0,
           notes: input.notes,
           createdBy: ctx.userId,
           createdByName: ctx.userName,
@@ -117,7 +129,7 @@ export async function createPurchaseOrder(ctx: TenantContext, input: CreatePurch
       session,
     );
 
-    return po.toObject();
+    return presentPurchaseOrder(po.toObject());
   });
 }
 
@@ -141,7 +153,7 @@ export async function sendPurchaseOrder(ctx: TenantContext, purchaseOrderId: Typ
     branchId: po.branchId,
   });
 
-  return po.toObject();
+  return presentPurchaseOrder(po.toObject());
 }
 
 export async function cancelPurchaseOrder(ctx: TenantContext, purchaseOrderId: Types.ObjectId) {
@@ -150,6 +162,9 @@ export async function cancelPurchaseOrder(ctx: TenantContext, purchaseOrderId: T
   assertBranchAccess(ctx, po.branchId);
   if (po.items.some((item) => item.receivedQty > 0)) {
     throw AppError.businessRule('A purchase order that has already received goods cannot be cancelled');
+  }
+  if ((po.paidPaise ?? 0) > 0) {
+    throw AppError.businessRule('Payments have been made against this order. Void them before cancelling it');
   }
   if (po.status === PURCHASE_ORDER_STATUSES.CANCELLED) {
     throw AppError.businessRule('This purchase order is already cancelled');
@@ -166,7 +181,7 @@ export async function cancelPurchaseOrder(ctx: TenantContext, purchaseOrderId: T
     branchId: po.branchId,
   });
 
-  return po.toObject();
+  return presentPurchaseOrder(po.toObject());
 }
 
 export interface ReceiveGoodsInput {
@@ -215,6 +230,12 @@ export async function receiveGoods(
     throw AppError.badRequest('Enter at least one quantity to receive');
   }
 
+  const organization = await Organization.findById(ctx.organizationId).select('timezone').lean();
+  const dueDate = endOfDayInTimeZone(
+    new Date(Date.now() + (po.creditDays ?? 0) * 86_400_000),
+    organization?.timezone ?? 'Asia/Kolkata',
+  );
+
   return withTransaction(async (session) => {
     const number = await nextDocumentNumber(ctx.organizationId, 'GR', session);
     const receiptId = new Types.ObjectId();
@@ -240,7 +261,15 @@ export async function receiveGoods(
             },
           },
         },
-        { $inc: { 'items.$[line].receivedQty': receivedQty } },
+        {
+          $inc: {
+            'items.$[line].receivedQty': receivedQty,
+            receivedValuePaise: multiplyPaise(line.unitPricePaise, receivedQty),
+          },
+          // The earliest delivery sets the due date - the supplier clock starts
+          // when the first goods arrive, not when the last do.
+          $min: { dueDate },
+        },
         { arrayFilters: [{ 'line.productId': line.productId }], ...sessionOption(session) },
       );
       if (claimed.matchedCount === 0) {
@@ -330,7 +359,7 @@ export async function receiveGoods(
       session,
     );
 
-    return { purchaseOrder: current.toObject(), goodsReceipt: receipt?.toObject() };
+    return { purchaseOrder: presentPurchaseOrder(current.toObject()), goodsReceipt: receipt?.toObject() };
   });
 }
 
@@ -356,7 +385,8 @@ export async function listPurchaseOrders(
     PurchaseOrder.countDocuments(filter),
   ]);
 
-  return { items, total, page: query.page, limit: query.limit };
+  const now = new Date();
+  return { items: items.map((po) => presentPurchaseOrder(po, now)), total, page: query.page, limit: query.limit };
 }
 
 export async function getPurchaseOrder(ctx: TenantContext, purchaseOrderId: Types.ObjectId) {
@@ -364,6 +394,29 @@ export async function getPurchaseOrder(ctx: TenantContext, purchaseOrderId: Type
   if (!po) throw AppError.notFound('Purchase order');
   assertBranchAccess(ctx, po.branchId);
 
-  const receipts = await GoodsReceipt.find({ ...orgFilter(ctx), purchaseOrderId }).sort({ receivedDate: -1 }).lean();
-  return { ...po, receipts };
+  const [receipts, payments] = await Promise.all([
+    GoodsReceipt.find({ ...orgFilter(ctx), purchaseOrderId }).sort({ receivedDate: -1 }).lean(),
+    SupplierPayment.find({ ...orgFilter(ctx), 'allocations.purchaseOrderId': purchaseOrderId })
+      .sort({ paymentDate: 1, _id: 1 })
+      .select('number paymentDate method reference status voidedAt voidReason allocations')
+      .lean(),
+  ]);
+
+  return {
+    ...presentPurchaseOrder(po),
+    receipts,
+    // One payment can cover several orders, so show only the share for this one.
+    payments: payments.map((payment) => ({
+      _id: payment._id,
+      number: payment.number,
+      paymentDate: payment.paymentDate,
+      method: payment.method,
+      reference: payment.reference,
+      status: payment.status,
+      voidedAt: payment.voidedAt,
+      voidReason: payment.voidReason,
+      amountPaise:
+        payment.allocations.find((a) => a.purchaseOrderId.equals(purchaseOrderId))?.amountPaise ?? 0,
+    })),
+  };
 }

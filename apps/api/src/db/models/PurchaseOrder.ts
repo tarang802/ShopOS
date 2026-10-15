@@ -20,6 +20,8 @@ export interface IPurchaseOrderItem {
   unitSymbol: string;
   orderedQty: number;
   receivedQty: number;
+  /** How much of what was received has gone back to the supplier. */
+  returnedQty: number;
   unitPricePaise: number;
   lineTotalPaise: number;
 }
@@ -37,6 +39,16 @@ export interface IPurchaseOrder {
   orderDate: Date;
   items: IPurchaseOrderItem[];
   totalPaise: number;
+  /** Value of goods received so far. This, not the order total, is what is owed. */
+  receivedValuePaise: number;
+  /** Value of goods sent back to the supplier. */
+  returnedPaise: number;
+  /** Total of supplier payments applied. Moves only through the supplier payments service. */
+  paidPaise: number;
+  /** The supplier credit days, frozen when the order was written. */
+  creditDays: number;
+  /** When payment falls due: the earliest delivery plus the credit days. */
+  dueDate?: Date;
   notes?: string;
   createdBy: Types.ObjectId;
   createdByName: string;
@@ -52,6 +64,7 @@ const purchaseOrderItemSchema = new Schema<IPurchaseOrderItem>(
     unitSymbol: { type: String, required: true, maxlength: 12 },
     orderedQty: { type: Number, required: true, min: 0 },
     receivedQty: { type: Number, required: true, default: 0, min: 0 },
+    returnedQty: { type: Number, required: true, default: 0, min: 0 },
     unitPricePaise: { type: Number, required: true, min: 0 },
     lineTotalPaise: { type: Number, required: true, min: 0 },
   },
@@ -82,6 +95,11 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
       ],
     },
     totalPaise: { type: Number, required: true, min: 0 },
+    receivedValuePaise: { type: Number, required: true, default: 0, min: 0 },
+    returnedPaise: { type: Number, required: true, default: 0, min: 0 },
+    paidPaise: { type: Number, required: true, default: 0, min: 0 },
+    creditDays: { type: Number, required: true, default: 0, min: 0, max: 365 },
+    dueDate: { type: Date },
     notes: { type: String, trim: true, maxlength: 1000 },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdByName: { type: String, required: true, maxlength: 120 },
@@ -92,6 +110,8 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
 purchaseOrderSchema.index({ organizationId: 1, number: 1 }, { unique: true });
 purchaseOrderSchema.index({ organizationId: 1, status: 1, orderDate: -1 });
 purchaseOrderSchema.index({ organizationId: 1, supplierId: 1, orderDate: -1 });
+// Payables and aging: orders with a due date, soonest first.
+purchaseOrderSchema.index({ organizationId: 1, status: 1, dueDate: 1 });
 
 purchaseOrderSchema.plugin(tenantGuard);
 

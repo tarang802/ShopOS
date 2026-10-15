@@ -10,6 +10,7 @@ import { inventoryRouter } from '../modules/inventory/inventory.routes';
 import { organizationsRouter } from '../modules/organizations/organizations.routes';
 import { paymentsRouter } from '../modules/payments/payments.routes';
 import { purchaseOrdersRouter, suppliersRouter } from '../modules/purchasing/purchasing.routes';
+import { supplierPaymentsRouter } from '../modules/purchasing/supplierPayments.routes';
 import { pricingRouter } from '../modules/pricing/pricing.routes';
 import { productsRouter } from '../modules/products/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
@@ -51,6 +52,7 @@ apiRouter.use('/sales-returns', salesReturnsRouter);
 
 apiRouter.use('/suppliers', suppliersRouter);
 apiRouter.use('/purchase-orders', purchaseOrdersRouter);
+apiRouter.use('/supplier-payments', supplierPaymentsRouter);
 
 apiRouter.use('/payments', paymentsRouter);
 
