@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import {
+  AUDIT_ACTIONS,
   PERMISSIONS,
   PURCHASE_ORDER_STATUSES,
   objectIdSchema,
@@ -16,6 +17,7 @@ import { sendCreated, sendPaginated, sendSuccess } from '../../core/http';
 import { paginate, safeSearchRegex } from '../../core/listQuery';
 import { AppError } from '../../core/AppError';
 import { orgFilter, toObjectId } from '../../core/tenantContext';
+import { diffFields, recordAudit } from '../../services/auditService';
 import * as service from './purchasing.service';
 
 /* -------------------------------------------------------------------------- */
@@ -72,6 +74,13 @@ suppliersRouter.post(
     const { email, ...rest } = input;
     const [supplier] = await Supplier.create([{ ...orgFilter(ctx), ...rest, ...(email ? { email } : {}) }]);
     if (!supplier) throw AppError.internal('Could not create the supplier');
+
+    await recordAudit(ctx, {
+      action: AUDIT_ACTIONS.SUPPLIER_CREATED,
+      entityType: 'Supplier',
+      entityId: supplier._id,
+      entityLabel: supplier.name,
+    });
     sendCreated(res, supplier.toObject(), 'Supplier added');
   },
 );
@@ -87,8 +96,22 @@ suppliersRouter.patch(
       _id: toObjectId(params<{ id: string }>(req).id, 'supplier id'),
     });
     if (!supplier) throw AppError.notFound('Supplier');
-    Object.assign(supplier, body<Partial<z.infer<typeof supplierSchema>>>(req));
+
+    const changes = body<Partial<z.infer<typeof supplierSchema>>>(req);
+    const before = supplier.toObject();
+    Object.assign(supplier, changes);
     await supplier.save();
+
+    const diff = diffFields(before, changes);
+    if (diff) {
+      await recordAudit(ctx, {
+        action: AUDIT_ACTIONS.SUPPLIER_UPDATED,
+        entityType: 'Supplier',
+        entityId: supplier._id,
+        entityLabel: supplier.name,
+        ...diff,
+      });
+    }
     sendSuccess(res, supplier.toObject(), 'Supplier updated');
   },
 );

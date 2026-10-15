@@ -1,14 +1,15 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { PERMISSIONS, objectIdSchema, paginationQuerySchema } from '@shopos/shared';
-import { Customer } from '../../db/models';
+import { AUDIT_ACTIONS, PERMISSIONS, objectIdSchema, paginationQuerySchema } from '@shopos/shared';
+import { Customer, PriceList } from '../../db/models';
 import { validate, body, params, query } from '../../middleware/validate';
 import { authenticate, requireContext } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/requirePermission';
 import { sendCreated, sendPaginated, sendSuccess } from '../../core/http';
 import { paginate, safeSearchRegex } from '../../core/listQuery';
 import { AppError } from '../../core/AppError';
-import { orgFilter, toObjectId } from '../../core/tenantContext';
+import { orgFilter, toObjectId, type TenantContext } from '../../core/tenantContext';
+import { diffFields, recordAudit } from '../../services/auditService';
 
 /**
  * Customers.
@@ -33,6 +34,13 @@ const customerSchema = z.object({
 });
 
 const idParamSchema = z.object({ id: objectIdSchema });
+
+/** A client-supplied rate list id must belong to this business. */
+async function assertPriceListOwned(ctx: TenantContext, priceListId?: string): Promise<void> {
+  if (!priceListId) return;
+  const exists = await PriceList.exists({ ...orgFilter(ctx), _id: priceListId });
+  if (!exists) throw AppError.badRequest('Select a valid rate list');
+}
 
 export const customersRouter = Router();
 
@@ -87,11 +95,19 @@ customersRouter.post(
     const ctx = requireContext(req);
     const input = body<z.infer<typeof customerSchema>>(req);
     const { email, ...rest } = input;
+    await assertPriceListOwned(ctx, rest.defaultPriceListId);
 
     const [customer] = await Customer.create([
       { ...orgFilter(ctx), ...rest, ...(email ? { email } : {}) },
     ]);
     if (!customer) throw AppError.internal('Could not create the customer');
+
+    await recordAudit(ctx, {
+      action: AUDIT_ACTIONS.CUSTOMER_CREATED,
+      entityType: 'Customer',
+      entityId: customer._id,
+      entityLabel: customer.name,
+    });
 
     sendCreated(res, customer.toObject(), 'Customer added');
   },
@@ -109,8 +125,23 @@ customersRouter.patch(
     });
     if (!customer) throw AppError.notFound('Customer');
 
-    Object.assign(customer, body<Partial<z.infer<typeof customerSchema>>>(req));
+    const changes = body<Partial<z.infer<typeof customerSchema>>>(req);
+    await assertPriceListOwned(ctx, changes.defaultPriceListId);
+
+    const before = customer.toObject();
+    Object.assign(customer, changes);
     await customer.save();
+
+    const diff = diffFields(before, changes);
+    if (diff) {
+      await recordAudit(ctx, {
+        action: AUDIT_ACTIONS.CUSTOMER_UPDATED,
+        entityType: 'Customer',
+        entityId: customer._id,
+        entityLabel: customer.name,
+        ...diff,
+      });
+    }
 
     sendSuccess(res, customer.toObject(), 'Customer updated');
   },
