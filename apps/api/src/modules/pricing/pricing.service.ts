@@ -196,66 +196,107 @@ export interface ResolvePriceInput {
  * wrong price on a bill is far worse than an honest refusal to quote.
  */
 export async function resolvePrice(ctx: TenantContext, input: ResolvePriceInput) {
-  const priceListId =
-    input.priceListId ??
-    (await PriceList.findOne({ ...orgFilter(ctx), isDefault: true, isActive: true }).lean())?._id;
+  const [resolved] = await resolvePrices(ctx, [input]);
+  return resolved!;
+}
 
-  if (!priceListId) throw AppError.badRequest('No rate list selected and no default is set');
+/**
+ * Resolve many lines at once.
+ *
+ * A bill with thirty lines used to cost four queries per line, run one after the
+ * other. Here every product, rate list and rate card involved is read in three
+ * queries and the slab for each line is picked in memory. It is the only
+ * implementation: `resolvePrice` calls it with one line, so a single quote and a
+ * whole invoice can never disagree about the rules.
+ */
+export async function resolvePrices(ctx: TenantContext, inputs: ResolvePriceInput[]) {
+  if (inputs.length === 0) return [];
 
-  const [product, priceList] = await Promise.all([
-    Product.findOne({ ...orgFilter(ctx), _id: input.productId }).lean(),
-    PriceList.findOne({ ...orgFilter(ctx), _id: priceListId }).lean(),
+  const needsDefault = inputs.some((input) => !input.priceListId);
+  const defaultListId = needsDefault
+    ? (await PriceList.findOne({ ...orgFilter(ctx), isDefault: true, isActive: true }).lean())?._id
+    : undefined;
+
+  const listIdFor = (input: ResolvePriceInput): Types.ObjectId => {
+    const id = input.priceListId ?? defaultListId;
+    if (!id) throw AppError.badRequest('No rate list selected and no default is set');
+    return id;
+  };
+
+  const productIds = [...new Set(inputs.map((input) => input.productId.toString()))].map(
+    (id) => new Types.ObjectId(id),
+  );
+  const priceListIds = [...new Set(inputs.map((input) => listIdFor(input).toString()))].map(
+    (id) => new Types.ObjectId(id),
+  );
+
+  const [products, priceLists, prices] = await Promise.all([
+    Product.find({ ...orgFilter(ctx), _id: { $in: productIds } }).lean(),
+    PriceList.find({ ...orgFilter(ctx), _id: { $in: priceListIds } }).lean(),
+    ProductPrice.find({
+      ...orgFilter(ctx),
+      productId: { $in: productIds },
+      priceListId: { $in: priceListIds },
+      isActive: true,
+    }).lean(),
   ]);
 
-  if (!product) throw AppError.notFound('Product');
-  if (!priceList) throw AppError.notFound('Rate list');
-  if (!priceList.isActive) {
-    throw new AppError(
-      422,
-      ERROR_CODES.PRICE_NOT_FOUND,
-      `The ${priceList.name} rate list is switched off`,
-    );
-  }
+  const productById = new Map(products.map((product) => [product._id.toString(), product]));
+  const listById = new Map(priceLists.map((list) => [list._id.toString(), list]));
+  const priceByKey = new Map(
+    prices.map((price) => [`${price.productId.toString()}:${price.priceListId.toString()}`, price]),
+  );
 
-  const price = await ProductPrice.findOne({
-    ...orgFilter(ctx),
-    productId: input.productId,
-    priceListId,
-    isActive: true,
-  }).lean();
+  return inputs.map((input) => {
+    const priceListId = listIdFor(input);
+    const product = productById.get(input.productId.toString());
+    const priceList = listById.get(priceListId.toString());
 
-  if (!price) {
-    throw new AppError(
-      422,
-      ERROR_CODES.PRICE_NOT_FOUND,
-      `${product.name} has no ${priceList.name} rate set yet`,
-    );
-  }
+    if (!product) throw AppError.notFound('Product');
+    if (!priceList) throw AppError.notFound('Rate list');
+    if (!priceList.isActive) {
+      throw new AppError(
+        422,
+        ERROR_CODES.PRICE_NOT_FOUND,
+        `The ${priceList.name} rate list is switched off`,
+      );
+    }
 
-  const tier = resolveTier(price.tiers, input.quantity);
-  if (!tier) {
-    throw new AppError(
-      422,
-      ERROR_CODES.PRICE_NOT_FOUND,
-      `No ${priceList.name} slab covers a quantity of ${input.quantity}`,
-    );
-  }
+    const price = priceByKey.get(`${input.productId.toString()}:${priceListId.toString()}`);
+    if (!price) {
+      throw new AppError(
+        422,
+        ERROR_CODES.PRICE_NOT_FOUND,
+        `${product.name} has no ${priceList.name} rate set yet`,
+      );
+    }
 
-  return {
-    productId: product._id.toString(),
-    productName: product.name,
-    sku: product.sku,
-    unitSymbol: product.unitSymbol,
-    priceListId: priceList._id.toString(),
-    priceListName: priceList.name,
-    quantity: input.quantity,
-    unitPricePaise: tier.pricePaise,
-    // Rounded to whole paise, because a line total that is not a whole number of
-    // paise cannot be paid and cannot be summed exactly.
-    lineTotalPaise: Math.round(tier.pricePaise * input.quantity),
-    appliedTier: { range: formatTierRange(tier), ...tier },
-    allTiers: sortTiers(price.tiers),
-  };
+    const tier = resolveTier(price.tiers, input.quantity);
+    if (!tier) {
+      throw new AppError(
+        422,
+        ERROR_CODES.PRICE_NOT_FOUND,
+        `No ${priceList.name} slab covers a quantity of ${input.quantity}`,
+      );
+    }
+
+    return {
+      productId: product._id.toString(),
+      productName: product.name,
+      sku: product.sku,
+      unitSymbol: product.unitSymbol,
+      taxRatePercent: product.taxRatePercent,
+      priceListId: priceList._id.toString(),
+      priceListName: priceList.name,
+      quantity: input.quantity,
+      unitPricePaise: tier.pricePaise,
+      // Rounded to whole paise, because a line total that is not a whole number of
+      // paise cannot be paid and cannot be summed exactly.
+      lineTotalPaise: Math.round(tier.pricePaise * input.quantity),
+      appliedTier: { range: formatTierRange(tier), ...tier },
+      allTiers: sortTiers(price.tiers),
+    };
+  });
 }
 
 /** The most recently changed rates, for the dashboard activity panel. */
