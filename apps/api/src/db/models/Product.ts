@@ -66,6 +66,14 @@ export interface IProduct {
   reorderLevel: number;
 
   /**
+   * What one unit costs the business, in paise - a moving average that goods
+   * receipts keep current. Never selected by default: it is only read by code
+   * that has first checked the caller holds `costs:view`, so a query that
+   * forgets to ask cannot leak it.
+   */
+  costPricePaise?: number;
+
+  /**
    * Products are archived, never deleted. Six months of invoices point at this
    * document, and those invoices must keep resolving forever.
    */
@@ -126,6 +134,7 @@ const productSchema = new Schema<IProduct>(
 
     taxRatePercent: { type: Number, required: true, default: 0, min: 0, max: 100 },
     reorderLevel: { type: Number, required: true, default: 0, min: 0 },
+    costPricePaise: { type: Number, min: 0, select: false },
     isActive: { type: Boolean, required: true, default: true },
 
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },

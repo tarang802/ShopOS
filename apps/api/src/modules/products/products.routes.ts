@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { PERMISSIONS, objectIdSchema, paginationQuerySchema } from '@shopos/shared';
+import { PERMISSIONS, objectIdSchema, paginationQuerySchema, paiseSchema } from '@shopos/shared';
 import { validate, body, params, query } from '../../middleware/validate';
 import { authenticate, requireContext } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/requirePermission';
@@ -31,6 +31,7 @@ const productCreateSchema = z.object({
   images: z.array(imageSchema).max(8).optional(),
   taxRatePercent: z.number().min(0).max(100).optional(),
   reorderLevel: z.number().min(0).max(1_000_000).optional(),
+  costPricePaise: paiseSchema.optional(),
 });
 
 const productListQuerySchema = paginationQuerySchema.extend({

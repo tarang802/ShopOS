@@ -222,6 +222,9 @@ async function seed(): Promise<void> {
         unitSymbol: unit.symbol,
         taxRatePercent: 12,
         reorderLevel: item.reorder,
+        // Cost sits at about 82% of the best wholesale rate: a believable
+        // margin for stationery, so the reports have something to show.
+        costPricePaise: Math.round(tiersFrom(item.wholesale).at(-1)!.pricePaise * 0.82),
         createdBy: owner._id,
       },
     ]);

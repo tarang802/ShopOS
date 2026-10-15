@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { AUDIT_ACTIONS, toSkip, type PaginationQuery } from '@shopos/shared';
+import { AUDIT_ACTIONS, PERMISSIONS, toSkip, type PaginationQuery } from '@shopos/shared';
 import {
   Branch,
   Brand,
@@ -37,6 +37,15 @@ export interface ProductInput {
   images?: { url: string; publicId: string; isPrimary?: boolean }[];
   taxRatePercent?: number;
   reorderLevel?: number;
+  /** Setting this needs `costs:view`. */
+  costPricePaise?: number;
+}
+
+/** Cost is the margin's other half, so only people trusted with it may write it. */
+function assertMaySetCost(ctx: TenantContext, input: Partial<ProductInput>): void {
+  if (input.costPricePaise !== undefined && !ctx.permissions.has(PERMISSIONS.COSTS_VIEW)) {
+    throw AppError.permissionDenied(PERMISSIONS.COSTS_VIEW);
+  }
 }
 
 /**
@@ -73,6 +82,13 @@ async function resolveReferences(ctx: TenantContext, input: ProductInput | Parti
   }
 
   return result;
+}
+
+/** Remove the cost from a product object unless the caller may see it. */
+function stripCost<T extends { costPricePaise?: number }>(ctx: TenantContext, product: T): T {
+  if (ctx.permissions.has(PERMISSIONS.COSTS_VIEW)) return product;
+  const { costPricePaise: _hidden, ...rest } = product;
+  return rest as T;
 }
 
 export interface ProductListFilters {
@@ -174,7 +190,10 @@ export async function listProducts(
  * every question at once rather than making staff click through tabs.
  */
 export async function getProductDetail(ctx: TenantContext, productId: Types.ObjectId) {
-  const product = await Product.findOne({ ...orgFilter(ctx), _id: productId }).lean();
+  const showCost = ctx.permissions.has(PERMISSIONS.COSTS_VIEW);
+  const product = await Product.findOne({ ...orgFilter(ctx), _id: productId })
+    .select(showCost ? '+costPricePaise' : '')
+    .lean();
   if (!product) throw AppError.notFound('Product');
 
   const [priceLists, prices, balances] = await Promise.all([
@@ -235,6 +254,7 @@ export async function getProductDetail(ctx: TenantContext, productId: Types.Obje
 }
 
 export async function createProduct(ctx: TenantContext, input: ProductInput) {
+  assertMaySetCost(ctx, input);
   const references = await resolveReferences(ctx, input);
   if (!references.unitId) throw AppError.badRequest('Select a valid unit');
 
@@ -266,6 +286,7 @@ export async function createProduct(ctx: TenantContext, input: ProductInput) {
       images: input.images ?? [],
       taxRatePercent: input.taxRatePercent ?? 0,
       reorderLevel: input.reorderLevel ?? 0,
+      ...(input.costPricePaise !== undefined ? { costPricePaise: input.costPricePaise } : {}),
       ...references,
       createdBy: ctx.userId,
     },
@@ -280,7 +301,7 @@ export async function createProduct(ctx: TenantContext, input: ProductInput) {
     after: { name: product.name, sku: product.sku, brandName: product.brandName },
   });
 
-  return product.toObject();
+  return stripCost(ctx, product.toObject());
 }
 
 export async function updateProduct(
@@ -288,7 +309,10 @@ export async function updateProduct(
   productId: Types.ObjectId,
   input: Partial<ProductInput>,
 ) {
-  const product = await Product.findOne({ ...orgFilter(ctx), _id: productId });
+  assertMaySetCost(ctx, input);
+  const product = await Product.findOne({ ...orgFilter(ctx), _id: productId }).select(
+    '+costPricePaise',
+  );
   if (!product) throw AppError.notFound('Product');
 
   const references = await resolveReferences(ctx, input);
@@ -335,7 +359,7 @@ export async function updateProduct(
     });
   }
 
-  return product.toObject();
+  return stripCost(ctx, product.toObject());
 }
 
 /**
