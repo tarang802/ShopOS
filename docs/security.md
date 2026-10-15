@@ -1,6 +1,6 @@
 # ShopOS Security
 
-## In place through Phase 8
+## In place
 
 ### Authentication
 
@@ -40,6 +40,21 @@
 The guard is not theoretical: it caught three live bugs during development where
 `populate()` produced an unscoped `find` on Branch, Product and PriceList. Each
 was replaced with an explicit tenant-scoped lookup.
+
+### Money and documents
+
+| Control | Where |
+|---|---|
+| Money is integer paise end to end; no floating-point rupee is ever stored | `packages/shared/src/money.ts` |
+| Every balance change is a compare-and-swap on the amount that was read, so two people paying the same bill at once cannot both win | `payments.service.ts`, `supplierPayments.service.ts`, `salesReturns.service.ts`, `purchaseReturns.service.ts` |
+| Multi-document changes (invoice + stock + payment + return) run in one transaction | `db/transaction.ts` |
+| Stock only changes through one function that writes the append-only ledger | `services/inventoryService.ts` |
+| Unit cost and margin are hidden from anyone without `costs:view`, in lists, details, invoices and reports | `products.service.ts`, `invoicePresenter.ts`, `reports.service.ts` |
+| A payment is never edited or deleted; it is voided, with a reason, which reverses its effect | `payments.service.ts` |
+| Refunds cannot exceed what has been paid and returned | `salesReturns.service.ts` |
+| Report CSVs prefix any cell starting `=`, `+`, `-`, `@`, tab or CR so a customer named like a formula cannot run in a spreadsheet | `modules/reports/csv.ts` |
+| A body over 1 MB is refused with 413, and unparseable JSON with 400, instead of surfacing as a server error | `middleware/errorHandler.ts` |
+| List date filters are calendar days in the shop's timezone, so an 11 pm sale on the 31st is in October | `core/calendar.ts` |
 
 ### Input handling
 
@@ -121,7 +136,35 @@ the same time.
 | Email verification and password reset | Architected but not built - no mail transport is configured |
 | Staff accounts are created with a password handed over directly | Replaced by an email invitation flow once mail is configured |
 | No CSRF token | Currently unnecessary: the refresh cookie is `sameSite=lax` and every state-changing route requires a Bearer token that a cross-site page cannot read. Revisit if cookie-only authentication is ever added |
-| Local MongoDB is standalone | Transactions unavailable, so a mid-transfer crash could leave stock in neither branch. Use a replica set |
+| MongoDB must be a replica set | Transactions require one. `npm run db:local` starts a private single-node set for development; Atlas and the Docker compose file provide one in production |
 | `esbuild` low-severity advisory (GHSA-g7r4-m6w7-qqqr) | Transitive via Vite and tsup. Affects esbuild's own dev server on Windows, which ShopOS never runs. No production exposure. An npm override does not take against Vite's pin |
-| No dependency scanning in CI | Deployment phase |
-| No automated test suite yet | `npm run smoke` covers 36 end-to-end assertions including authorization and tenant isolation. Unit and integration tests are Phase 16 |
+| Dependency scanning | `npm audit` runs in CI and fails the build on high-severity advisories |
+| Background jobs run inside the API process | The overdue sweep is guarded by a unique `dedupeKey`, so two instances cannot double-notify, but both will do the work. Set `JOBS_ENABLED=false` on all but one instance |
+
+---
+
+## Verification
+
+`apps/api/src/test/security.test.ts` is run on every build. It asserts, against the
+real app:
+
+- every data endpoint answers 401 without a token, and with a forged one;
+- counter staff get 403 on reports, users, roles, the audit log and purchasing;
+- cost price never appears in a response for someone without `costs:view`;
+- a member cannot promote themselves;
+- extra fields (`organizationId`, `paidPaise`, `status`) in a body are ignored;
+- operators in query strings, malformed ids and regex-bomb searches are harmless;
+- oversize bodies get 413 and errors carry no stack or driver wording;
+- security headers are present and a foreign `Origin` is refused;
+- a formula-like customer name is neutralised in a CSV export.
+
+`tenancy.test.ts` covers the cross-business cases: every id that belongs to another
+shop must behave exactly like an id that does not exist.
+
+### Found and fixed during the review
+
+- A request body over the size limit, or malformed JSON, was reported as a 500.
+  It is now 413 / 400 (`errorHandler.ts`).
+- Invoice, payment and return lists treated a "to" date as the end of a UTC day, so
+  late-evening Indian sales fell into the next day's filter. They now use the shop's
+  timezone.

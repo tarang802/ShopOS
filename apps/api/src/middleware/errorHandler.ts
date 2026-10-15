@@ -62,6 +62,26 @@ function normalize(error: unknown): Normalized {
     };
   }
 
+  // Raised by the body parser before any route runs: a body over the size limit or
+  // JSON that does not parse. These are the caller's mistake, not a server fault.
+  const parserError = error as { type?: string; status?: number } | null;
+  if (parserError?.type === 'entity.too.large') {
+    return {
+      statusCode: 413,
+      code: ERROR_CODES.BAD_REQUEST,
+      message: 'The request is too large',
+      isOperational: true,
+    };
+  }
+  if (parserError?.type === 'entity.parse.failed' || parserError?.type === 'encoding.unsupported') {
+    return {
+      statusCode: 400,
+      code: ERROR_CODES.BAD_REQUEST,
+      message: 'The request body could not be read',
+      isOperational: true,
+    };
+  }
+
   // A malformed id such as /products/not-an-id.
   if (error instanceof MongooseError.CastError) {
     return {

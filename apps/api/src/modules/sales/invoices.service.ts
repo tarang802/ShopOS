@@ -23,6 +23,7 @@ import {
   type IInvoice,
 } from '../../db/models';
 import { AppError } from '../../core/AppError';
+import { organizationDayRange } from '../../core/calendar';
 import { safeSearchRegex } from '../../core/listQuery';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { sessionOption, withTransaction } from '../../db/transaction';
@@ -534,17 +535,8 @@ export async function listInvoices(
     filter.$or = [{ number: pattern }, { customerName: pattern }];
   }
 
-  if (filters.from || filters.to) {
-    const range: Record<string, Date> = {};
-    if (filters.from) range.$gte = filters.from;
-    if (filters.to) {
-      // The end date is a calendar day, so it includes that whole day.
-      const end = new Date(filters.to);
-      end.setUTCHours(23, 59, 59, 999);
-      range.$lte = end;
-    }
-    filter.invoiceDate = range;
-  }
+  const dateRange = await organizationDayRange(ctx, filters.from, filters.to);
+  if (dateRange) filter.invoiceDate = dateRange;
 
   const sortField =
     query.sortBy && SORTABLE_FIELDS.includes(query.sortBy) ? query.sortBy : 'invoiceDate';

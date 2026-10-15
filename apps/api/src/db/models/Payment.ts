@@ -91,6 +91,7 @@ const paymentSchema = new Schema<IPayment>(
 );
 
 paymentSchema.index({ organizationId: 1, number: 1 }, { unique: true });
+paymentSchema.index({ organizationId: 1, paymentDate: -1 });
 paymentSchema.index({ organizationId: 1, branchId: 1, paymentDate: -1 });
 paymentSchema.index({ organizationId: 1, status: 1, paymentDate: -1 });
 paymentSchema.index({ organizationId: 1, customerId: 1, paymentDate: -1 });

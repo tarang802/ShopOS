@@ -147,6 +147,7 @@ const invoiceSchema = new Schema<IInvoice>(
 );
 
 invoiceSchema.index({ organizationId: 1, number: 1 }, { unique: true });
+invoiceSchema.index({ organizationId: 1, invoiceDate: -1 });
 invoiceSchema.index({ organizationId: 1, branchId: 1, invoiceDate: -1 });
 invoiceSchema.index({ organizationId: 1, customerId: 1, invoiceDate: -1 });
 invoiceSchema.index({ organizationId: 1, status: 1, invoiceDate: -1 });

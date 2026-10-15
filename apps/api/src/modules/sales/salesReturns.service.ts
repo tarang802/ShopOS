@@ -14,6 +14,7 @@ import {
 } from '@shopos/shared';
 import { Invoice, SalesReturn, type ISalesReturnItem } from '../../db/models';
 import { AppError } from '../../core/AppError';
+import { organizationDayRange } from '../../core/calendar';
 import { safeSearchRegex } from '../../core/listQuery';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { sessionOption, withTransaction } from '../../db/transaction';
@@ -360,16 +361,8 @@ export async function listSalesReturns(
     const pattern = safeSearchRegex(filters.q);
     filter.$or = [{ number: pattern }, { invoiceNumber: pattern }, { customerName: pattern }];
   }
-  if (filters.from || filters.to) {
-    const range: Record<string, Date> = {};
-    if (filters.from) range.$gte = filters.from;
-    if (filters.to) {
-      const end = new Date(filters.to);
-      end.setUTCHours(23, 59, 59, 999);
-      range.$lte = end;
-    }
-    filter.returnDate = range;
-  }
+  const dateRange = await organizationDayRange(ctx, filters.from, filters.to);
+  if (dateRange) filter.returnDate = dateRange;
 
   const [items, total] = await Promise.all([
     SalesReturn.find(filter)

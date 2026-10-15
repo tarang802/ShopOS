@@ -12,6 +12,7 @@ import {
 } from '@shopos/shared';
 import { Branch, Customer, Invoice, Payment, type IInvoice } from '../../db/models';
 import { AppError } from '../../core/AppError';
+import { organizationDayRange } from '../../core/calendar';
 import { safeSearchRegex } from '../../core/listQuery';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { sessionOption, withTransaction } from '../../db/transaction';
@@ -335,16 +336,8 @@ export async function listPayments(
     const pattern = safeSearchRegex(filters.q);
     filter.$or = [{ number: pattern }, { customerName: pattern }, { reference: pattern }];
   }
-  if (filters.from || filters.to) {
-    const range: Record<string, Date> = {};
-    if (filters.from) range.$gte = filters.from;
-    if (filters.to) {
-      const end = new Date(filters.to);
-      end.setUTCHours(23, 59, 59, 999);
-      range.$lte = end;
-    }
-    filter.paymentDate = range;
-  }
+  const dateRange = await organizationDayRange(ctx, filters.from, filters.to);
+  if (dateRange) filter.paymentDate = dateRange;
 
   const [items, total] = await Promise.all([
     Payment.find(filter)
