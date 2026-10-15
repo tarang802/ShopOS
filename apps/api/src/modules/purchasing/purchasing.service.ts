@@ -331,7 +331,11 @@ export async function receiveGoods(
             sku: line.sku,
             unitSymbol: line.unitSymbol,
             receivedQty,
+            unitPricePaise: line.unitPricePaise,
           })),
+          valuePaise: sumPaise(
+            receiptLines.map(({ line, receivedQty }) => multiplyPaise(line.unitPricePaise, receivedQty)),
+          ),
           notes: input.notes,
           receivedBy: ctx.userId,
           receivedByName: ctx.userName,

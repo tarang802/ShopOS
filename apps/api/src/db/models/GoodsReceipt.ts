@@ -16,6 +16,8 @@ export interface IGoodsReceiptItem {
   sku: string;
   unitSymbol: string;
   receivedQty: number;
+  /** The order's agreed price per unit, frozen so a receipt keeps its own value. */
+  unitPricePaise: number;
 }
 
 export interface IGoodsReceipt {
@@ -28,6 +30,8 @@ export interface IGoodsReceipt {
   number: string;
   receivedDate: Date;
   items: IGoodsReceiptItem[];
+  /** What this delivery is worth, which is what the supplier statement shows. */
+  valuePaise: number;
   notes?: string;
   receivedBy: Types.ObjectId;
   receivedByName: string;
@@ -41,6 +45,7 @@ const goodsReceiptItemSchema = new Schema<IGoodsReceiptItem>(
     sku: { type: String, required: true, maxlength: 40 },
     unitSymbol: { type: String, required: true, maxlength: 12 },
     receivedQty: { type: Number, required: true, min: 0 },
+    unitPricePaise: { type: Number, required: true, default: 0, min: 0 },
   },
   { _id: false },
 );
@@ -58,6 +63,7 @@ const goodsReceiptSchema = new Schema<IGoodsReceipt>(
       required: true,
       validate: [(value: unknown[]) => value.length >= 1, 'A goods receipt needs at least one line'],
     },
+    valuePaise: { type: Number, required: true, default: 0, min: 0 },
     notes: { type: String, trim: true, maxlength: 1000 },
     receivedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     receivedByName: { type: String, required: true, maxlength: 120 },

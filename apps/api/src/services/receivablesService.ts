@@ -27,6 +27,22 @@ export const OUTSTANDING_EXPRESSION = {
 } as const;
 
 /**
+ * What the business is holding that belongs to the customer on one invoice: paid,
+ * then returned goods, so the payment now exceeds the reduced bill. Never below zero.
+ */
+export const REFUND_DUE_EXPRESSION = {
+  $max: [
+    0,
+    {
+      $subtract: [
+        { $subtract: ['$paidPaise', { $ifNull: ['$refundedPaise', 0] }] },
+        { $subtract: ['$totalPaise', { $ifNull: ['$returnedPaise', 0] }] },
+      ],
+    },
+  ],
+} as const;
+
+/**
  * A filter value that matches an amount which may be missing altogether.
  *
  * Invoices written before returns existed have no returnedPaise or refundedPaise,

@@ -16,6 +16,8 @@ import { paginate, safeSearchRegex } from '../../core/listQuery';
 import { AppError } from '../../core/AppError';
 import { orgFilter, toObjectId, type TenantContext } from '../../core/tenantContext';
 import { diffFields, recordAudit } from '../../services/auditService';
+import { booleanQuery, dateRangeQuery } from '../sales/sales.schemas';
+import * as ledger from './customerLedger.service';
 
 /**
  * Customers.
@@ -54,13 +56,20 @@ export const customersRouter = Router();
 
 customersRouter.use(authenticate);
 
+const listQuerySchema = paginationQuerySchema.extend({
+  /** Add what each customer owes to every row. */
+  withBalance: booleanQuery,
+});
+
+const statementQuerySchema = z.object({ ...dateRangeQuery });
+
 customersRouter.get(
   '/',
   requirePermission(PERMISSIONS.CUSTOMERS_VIEW),
-  validate({ query: paginationQuerySchema }),
+  validate({ query: listQuerySchema }),
   async (req: Request, res: Response) => {
     const ctx = requireContext(req);
-    const listQuery = query<z.infer<typeof paginationQuerySchema>>(req);
+    const listQuery = query<z.infer<typeof listQuerySchema>>(req);
 
     const filter: Record<string, unknown> = { ...orgFilter(ctx), isActive: true };
     if (listQuery.search) {
@@ -76,7 +85,48 @@ customersRouter.get(
       defaultSort: { name: 1 },
     });
 
+    if (listQuery.withBalance && ctx.permissions.has(PERMISSIONS.PAYMENTS_VIEW)) {
+      const owed = await ledger.outstandingByCustomer(
+        ctx,
+        result.items.map((customer) => customer._id),
+      );
+      const withBalance = result.items.map((customer) => ({
+        ...customer,
+        outstandingPaise: owed.get(customer._id.toString()) ?? 0,
+      }));
+      sendPaginated(res, withBalance, result);
+      return;
+    }
+
     sendPaginated(res, result.items, result);
+  },
+);
+
+customersRouter.get(
+  '/:id/summary',
+  requirePermission(PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.SALES_VIEW),
+  validate({ params: idParamSchema }),
+  async (req: Request, res: Response) => {
+    const summary = await ledger.customerSummary(
+      requireContext(req),
+      toObjectId(params<{ id: string }>(req).id, 'customer id'),
+    );
+    sendSuccess(res, summary);
+  },
+);
+
+customersRouter.get(
+  '/:id/statement',
+  requirePermission(PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.PAYMENTS_VIEW),
+  validate({ params: idParamSchema, query: statementQuerySchema }),
+  async (req: Request, res: Response) => {
+    const range = query<z.infer<typeof statementQuerySchema>>(req);
+    const statement = await ledger.customerStatement(
+      requireContext(req),
+      toObjectId(params<{ id: string }>(req).id, 'customer id'),
+      range,
+    );
+    sendSuccess(res, statement);
   },
 );
 

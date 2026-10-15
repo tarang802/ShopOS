@@ -18,6 +18,8 @@ import { paginate, safeSearchRegex } from '../../core/listQuery';
 import { AppError } from '../../core/AppError';
 import { orgFilter, toObjectId } from '../../core/tenantContext';
 import { diffFields, recordAudit } from '../../services/auditService';
+import { booleanQuery, dateRangeQuery } from '../sales/sales.schemas';
+import * as supplierLedger from './supplierLedger.service';
 import * as service from './purchasing.service';
 
 /* -------------------------------------------------------------------------- */
@@ -40,13 +42,21 @@ const supplierSchema = z.object({
 export const suppliersRouter = Router();
 suppliersRouter.use(authenticate);
 
+const supplierListQuerySchema = paginationQuerySchema.extend({
+  /** Add what is owed to each supplier to every row. */
+  withBalance: booleanQuery,
+});
+
+const supplierStatementQuerySchema = z.object({ ...dateRangeQuery });
+const supplierIdParam = z.object({ id: objectIdSchema });
+
 suppliersRouter.get(
   '/',
   requirePermission(PERMISSIONS.SUPPLIERS_VIEW),
-  validate({ query: paginationQuerySchema }),
+  validate({ query: supplierListQuerySchema }),
   async (req: Request, res: Response) => {
     const ctx = requireContext(req);
-    const listQuery = query<z.infer<typeof paginationQuerySchema>>(req);
+    const listQuery = query<z.infer<typeof supplierListQuerySchema>>(req);
 
     const filter: Record<string, unknown> = { ...orgFilter(ctx), isActive: true };
     if (listQuery.search) {
@@ -61,7 +71,56 @@ suppliersRouter.get(
       sortableFields: ['name', 'createdAt'],
       defaultSort: { name: 1 },
     });
+
+    if (listQuery.withBalance && ctx.permissions.has(PERMISSIONS.PURCHASES_VIEW)) {
+      const owed = await supplierLedger.owedBySupplier(
+        ctx,
+        result.items.map((supplier) => supplier._id),
+      );
+      sendPaginated(
+        res,
+        result.items.map((supplier) => ({
+          ...supplier,
+          owedPaise: owed.get(supplier._id.toString()) ?? 0,
+        })),
+        result,
+      );
+      return;
+    }
+
     sendPaginated(res, result.items, result);
+  },
+);
+
+suppliersRouter.get(
+  '/:id/summary',
+  requirePermission(PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.PURCHASES_VIEW),
+  validate({ params: supplierIdParam }),
+  async (req: Request, res: Response) => {
+    sendSuccess(
+      res,
+      await supplierLedger.supplierSummary(
+        requireContext(req),
+        toObjectId(params<{ id: string }>(req).id, 'supplier id'),
+      ),
+    );
+  },
+);
+
+suppliersRouter.get(
+  '/:id/statement',
+  requirePermission(PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.PURCHASES_VIEW),
+  validate({ params: supplierIdParam, query: supplierStatementQuerySchema }),
+  async (req: Request, res: Response) => {
+    const range = query<z.infer<typeof supplierStatementQuerySchema>>(req);
+    sendSuccess(
+      res,
+      await supplierLedger.supplierStatement(
+        requireContext(req),
+        toObjectId(params<{ id: string }>(req).id, 'supplier id'),
+        range,
+      ),
+    );
   },
 );
 
