@@ -6,6 +6,7 @@ import {
   objectIdSchema,
   paginationQuerySchema,
   paiseSchema,
+  percentSchema,
   positiveQuantitySchema,
 } from '@shopos/shared';
 import { validate, body, params, query } from '../../middleware/validate';
@@ -19,6 +20,7 @@ const lineSchema = z.object({
   productId: objectIdSchema,
   quantity: positiveQuantitySchema,
   priceListId: objectIdSchema.optional(),
+  discountPercent: percentSchema.optional(),
   overrideUnitPricePaise: paiseSchema.optional(),
 });
 
@@ -26,6 +28,7 @@ const createInvoiceSchema = z.object({
   branchId: objectIdSchema,
   customerId: objectIdSchema.optional(),
   customerName: z.string().trim().max(160).optional(),
+  creditDays: z.number().int().min(0).max(365).optional(),
   notes: z.string().trim().max(1000).optional(),
   items: z.array(lineSchema).min(1, 'Add at least one product').max(500),
 });
@@ -36,6 +39,13 @@ const listQuerySchema = paginationQuerySchema.extend({
   branchId: objectIdSchema.optional(),
   status: z.enum(Object.values(INVOICE_STATUSES) as [string, ...string[]]).optional(),
   customerId: objectIdSchema.optional(),
+  q: z.string().trim().max(100).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  // A query string carries booleans as text, and z.coerce.boolean() would turn
+  // the string "false" into true.
+  overdue: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  outstandingOnly: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
 });
 
 const idParamSchema = z.object({ id: objectIdSchema });
