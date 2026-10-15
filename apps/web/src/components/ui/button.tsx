@@ -10,16 +10,19 @@ import { cn } from '@/lib/utils';
  * work on screen than marketing pages do.
  */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border text-sm font-semibold tracking-wide transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:opacity-90',
-        secondary: 'bg-secondary text-secondary-foreground hover:opacity-90',
-        outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
-        link: 'text-primary underline-offset-4 hover:underline',
+        default:
+          'border-primary bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:brightness-125',
+        secondary: 'border-border bg-secondary text-secondary-foreground hover:bg-accent',
+        outline:
+          'border-input bg-card text-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] hover:bg-accent hover:text-accent-foreground',
+        ghost: 'border-transparent hover:bg-accent hover:text-accent-foreground',
+        destructive:
+          'border-destructive bg-destructive text-destructive-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:brightness-125',
+        link: 'border-transparent text-primary underline-offset-4 hover:underline',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

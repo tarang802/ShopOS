@@ -1,91 +1,107 @@
 @import 'tailwindcss';
 
 /*
- * ShopOS design tokens.
+ * ShopOS design tokens - the classic ledger look.
  *
- * Colours are declared once as CSS variables and mapped into Tailwind's theme,
- * so a component never hard-codes a hex value. Light and dark are the same set
- * of names with different values, which is what lets the whole app switch theme
- * without a single component knowing about it.
+ * The idea is the account book on a wholesaler's counter: warm paper, ink, a deep
+ * navy cover and brass fittings. Colours are declared once as CSS variables and
+ * mapped into Tailwind's theme, so a component never hard-codes a hex value, and the
+ * whole look can be changed from this file alone.
  *
- * The palette is deliberately low-saturation: this is a screen staff stare at
- * for eight hours, and dense tables read better on a quiet background.
+ * Corners are almost square and tables are ruled, because ruled columns are how
+ * people have read figures against a paper register for a century. Headings are
+ * serif; everything dense - tables, forms, numbers - stays in a clear sans-serif.
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.21 0.02 250);
+  /* Paper and ink */
+  --background: oklch(0.955 0.014 85);
+  --foreground: oklch(0.22 0.02 255);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 250);
+  --card: oklch(0.985 0.008 85);
+  --card-foreground: oklch(0.22 0.02 255);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 250);
+  --popover: oklch(0.985 0.008 85);
+  --popover-foreground: oklch(0.22 0.02 255);
 
-  --primary: oklch(0.48 0.16 258);
-  --primary-foreground: oklch(0.99 0 0);
+  /* The navy cover */
+  --primary: oklch(0.3 0.075 255);
+  --primary-foreground: oklch(0.97 0.012 85);
 
-  --secondary: oklch(0.96 0.005 250);
-  --secondary-foreground: oklch(0.28 0.02 250);
+  --secondary: oklch(0.92 0.02 85);
+  --secondary-foreground: oklch(0.28 0.05 255);
 
-  --muted: oklch(0.97 0.004 250);
-  --muted-foreground: oklch(0.53 0.02 250);
+  --muted: oklch(0.935 0.016 85);
+  --muted-foreground: oklch(0.45 0.025 255);
 
-  --accent: oklch(0.96 0.01 250);
-  --accent-foreground: oklch(0.28 0.02 250);
+  /* A parchment highlight for hovered and selected rows */
+  --accent: oklch(0.9 0.035 85);
+  --accent-foreground: oklch(0.25 0.05 255);
 
-  --destructive: oklch(0.58 0.21 27);
-  --destructive-foreground: oklch(0.99 0 0);
+  /* Maroon, green and brass in place of red, green and amber */
+  --destructive: oklch(0.42 0.14 25);
+  --destructive-foreground: oklch(0.97 0.012 85);
 
-  --success: oklch(0.6 0.14 155);
-  --success-foreground: oklch(0.99 0 0);
+  --success: oklch(0.42 0.09 150);
+  --success-foreground: oklch(0.97 0.012 85);
 
-  --warning: oklch(0.75 0.15 75);
-  --warning-foreground: oklch(0.24 0.03 75);
+  --warning: oklch(0.74 0.12 82);
+  --warning-foreground: oklch(0.25 0.05 75);
 
-  --border: oklch(0.92 0.005 250);
-  --input: oklch(0.92 0.005 250);
-  --ring: oklch(0.48 0.16 258);
+  --border: oklch(0.8 0.022 80);
+  --input: oklch(0.72 0.028 80);
+  --ring: oklch(0.62 0.1 80);
 
-  --radius: 0.5rem;
+  /* The navy sidebar and its brass trim */
+  --sidebar: oklch(0.255 0.065 255);
+  --sidebar-foreground: oklch(0.93 0.02 85);
+  --sidebar-muted: oklch(0.72 0.03 255);
+  --brass: oklch(0.74 0.11 82);
+
+  --radius: 0.125rem;
 }
 
 .dark {
-  --background: oklch(0.19 0.015 255);
-  --foreground: oklch(0.95 0.005 250);
+  --background: oklch(0.2 0.02 255);
+  --foreground: oklch(0.93 0.012 85);
 
-  --card: oklch(0.23 0.017 255);
-  --card-foreground: oklch(0.95 0.005 250);
+  --card: oklch(0.245 0.025 255);
+  --card-foreground: oklch(0.93 0.012 85);
 
-  --popover: oklch(0.23 0.017 255);
-  --popover-foreground: oklch(0.95 0.005 250);
+  --popover: oklch(0.245 0.025 255);
+  --popover-foreground: oklch(0.93 0.012 85);
 
-  --primary: oklch(0.68 0.15 258);
-  --primary-foreground: oklch(0.18 0.02 255);
+  --primary: oklch(0.7 0.1 82);
+  --primary-foreground: oklch(0.2 0.03 255);
 
-  --secondary: oklch(0.28 0.02 255);
-  --secondary-foreground: oklch(0.95 0.005 250);
+  --secondary: oklch(0.3 0.03 255);
+  --secondary-foreground: oklch(0.93 0.012 85);
 
-  --muted: oklch(0.27 0.018 255);
-  --muted-foreground: oklch(0.68 0.015 250);
+  --muted: oklch(0.285 0.025 255);
+  --muted-foreground: oklch(0.7 0.02 255);
 
-  --accent: oklch(0.3 0.02 255);
-  --accent-foreground: oklch(0.95 0.005 250);
+  --accent: oklch(0.32 0.035 255);
+  --accent-foreground: oklch(0.93 0.012 85);
 
-  --destructive: oklch(0.62 0.2 25);
+  --destructive: oklch(0.62 0.17 25);
   --destructive-foreground: oklch(0.98 0 0);
 
-  --success: oklch(0.65 0.14 155);
+  --success: oklch(0.68 0.12 150);
   --success-foreground: oklch(0.18 0.02 255);
 
-  --warning: oklch(0.78 0.14 75);
+  --warning: oklch(0.78 0.12 82);
   --warning-foreground: oklch(0.2 0.03 75);
 
-  --border: oklch(0.32 0.02 255);
-  --input: oklch(0.32 0.02 255);
-  --ring: oklch(0.68 0.15 258);
+  --border: oklch(0.36 0.03 255);
+  --input: oklch(0.42 0.03 255);
+  --ring: oklch(0.7 0.1 82);
+
+  --sidebar: oklch(0.17 0.04 255);
+  --sidebar-foreground: oklch(0.92 0.015 85);
+  --sidebar-muted: oklch(0.62 0.03 255);
+  --brass: oklch(0.74 0.11 82);
 }
 
 @theme inline {
@@ -112,10 +128,19 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-brass: var(--brass);
 
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
+
+  /* No web fonts: the app must open instantly on a modest shop connection, and
+     these faces ship with the operating system. Nirmala UI covers Devanagari. */
+  --font-sans: 'Segoe UI', Tahoma, 'Nirmala UI', Verdana, Arial, sans-serif;
+  --font-serif: Georgia, Cambria, 'Palatino Linotype', 'Times New Roman', serif;
 }
 
 @layer base {
@@ -126,8 +151,15 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-feature-settings: 'cv11', 'ss01';
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Titles are set in a serif, the way a ledger's are. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
   }
 
   /* Keyboard users must always be able to see where they are. ERP staff work
@@ -144,10 +176,45 @@
 }
 
 /*
+ * Ruled tables.
+ *
+ * These rules are deliberately outside the @layer blocks: unlayered CSS beats
+ * every utility class, so one definition ruled every table in the app - the shared
+ * Table component and the hand-written ones on detail pages alike - and none of
+ * them has to opt in or can drift out of step.
+ */
+thead {
+  background-color: var(--primary);
+}
+
+thead th {
+  color: var(--primary-foreground);
+  border-color: color-mix(in oklch, var(--primary-foreground) 22%, transparent);
+}
+
+table th:not(:last-child),
+table td:not(:last-child) {
+  border-right: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+
+tbody tr:nth-child(even) {
+  background-color: color-mix(in oklch, var(--muted) 60%, transparent);
+}
+
+tbody tr:hover {
+  background-color: var(--accent);
+}
+
+/* A thin double rule - the classic mark of a total or a section break. */
+.rule-double {
+  border-top: 3px double color-mix(in oklch, var(--brass) 80%, var(--border));
+}
+
+/*
  * Printing. An invoice is a document people hand across a counter, so the page
  * chrome - sidebar, header, buttons - must vanish and leave only the bill. Anything
  * meant for paper alone carries .print-only; anything meant for the screen alone
- * carries Tailwind's print:hidden.
+ * carries Tailwind's print:hidden. Paper gets plain black on white, ruled lightly.
  */
 .print-only {
   display: none;
@@ -161,6 +228,20 @@
 
   .print-only {
     display: block;
+  }
+
+  thead {
+    background-color: transparent;
+    border-bottom: 2px solid black;
+  }
+
+  thead th {
+    color: black;
+  }
+
+  tbody tr:nth-child(even),
+  tbody tr:hover {
+    background-color: transparent;
   }
 
   @page {

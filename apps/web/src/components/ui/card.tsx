@@ -3,21 +3,33 @@ import { cn } from '@/lib/utils';
 
 type DivProps = HTMLAttributes<HTMLDivElement>;
 
+/**
+ * A framed panel, like a ruled page in a register: a solid border, a faint shadow
+ * along the bottom edge, and a tinted title strip separated from the body by a rule.
+ */
 export function Card({ className, ...props }: DivProps) {
   return (
     <div
-      className={cn('rounded-lg border border-border bg-card text-card-foreground', className)}
+      className={cn(
+        'rounded-md border border-border bg-card text-card-foreground shadow-[0_1px_0_rgba(0,0,0,0.05),0_2px_6px_-3px_rgba(0,0,0,0.12)]',
+        className,
+      )}
       {...props}
     />
   );
 }
 
 export function CardHeader({ className, ...props }: DivProps) {
-  return <div className={cn('flex flex-col gap-1 p-5 pb-3', className)} {...props} />;
+  return (
+    <div
+      className={cn('flex flex-col gap-1 border-b border-border bg-muted/60 px-5 py-3', className)}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('text-sm font-semibold tracking-tight', className)} {...props} />;
+  return <h3 className={cn('text-[15px] font-semibold tracking-tight', className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
@@ -25,5 +37,5 @@ export function CardDescription({ className, ...props }: HTMLAttributes<HTMLPara
 }
 
 export function CardContent({ className, ...props }: DivProps) {
-  return <div className={cn('p-5 pt-0', className)} {...props} />;
+  return <div className={cn('p-5', className)} {...props} />;
 }

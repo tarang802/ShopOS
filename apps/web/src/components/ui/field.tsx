@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn('mb-1.5 block text-sm font-medium text-foreground', className)}
+      className={cn('mb-1.5 block text-[13px] font-semibold text-foreground', className)}
       {...props}
     />
   );
@@ -32,9 +32,9 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        'h-10 w-full rounded-md border border-input bg-background px-3 text-sm',
+        'h-10 w-full rounded-md border border-input bg-card px-3 text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
         'placeholder:text-muted-foreground',
-        'focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-60',
+        'focus-visible:border-ring disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-70',
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        'min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm',
+        'min-h-20 w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
         'placeholder:text-muted-foreground focus-visible:border-ring',
         className,
       )}
@@ -59,8 +59,8 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
   return (
     <select
       className={cn(
-        'h-10 w-full rounded-md border border-input bg-background px-3 text-sm',
-        'focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-60',
+        'h-10 w-full rounded-md border border-input bg-card px-3 text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
+        'focus-visible:border-ring disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-70',
         className,
       )}
       {...props}

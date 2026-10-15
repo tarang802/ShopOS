@@ -65,18 +65,18 @@ export function RegisterPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-md border-2 border-brass bg-primary text-brass shadow-md">
             <Store className="h-6 w-6" aria-hidden />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Start with ShopOS</h1>
+          <h1 className="font-serif text-3xl font-semibold tracking-wide text-primary">Start with ShopOS</h1>
           <p className="mt-1 text-sm text-muted-foreground">अपना बिज़नेस अकाउंट बनाएं</p>
         </div>
 
         <form
-          className="rounded-lg border border-border bg-card p-6"
+          className="rounded-md border-2 border-primary bg-card p-6 shadow-[6px_6px_0_0_color-mix(in_oklch,var(--primary)_18%,transparent)]"
           onSubmit={(event) => {
             event.preventDefault();
             setError(null);

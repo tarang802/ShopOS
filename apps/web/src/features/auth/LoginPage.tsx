@@ -82,19 +82,19 @@ export function LoginPage() {
   const busy = login.isPending || googleLogin.isPending;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-md border-2 border-brass bg-primary text-brass shadow-md">
             <Store className="h-6 w-6" aria-hidden />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">ShopOS</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="font-serif text-4xl font-semibold tracking-wide text-primary">ShopOS</h1>
+          <p className="mt-2 border-t-[3px] border-double border-brass/70 pt-2 font-serif text-sm italic text-muted-foreground">
             Your shop, your rates, always up to date
           </p>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-6">
+        <div className="rounded-md border-2 border-primary bg-card p-6 shadow-[6px_6px_0_0_color-mix(in_oklch,var(--primary)_18%,transparent)]">
           <h2 className="mb-1 text-base font-semibold">Sign in</h2>
           <p className="mb-5 text-sm text-muted-foreground">साइन इन करें</p>
 

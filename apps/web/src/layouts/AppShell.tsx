@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   Banknote,
-  Boxes,
   Building2,
   ChevronDown,
   History,
@@ -51,6 +50,9 @@ import { queryClient } from '@/lib/queryClient';
  * Navigation entries are filtered by permission, so an inventory hand simply
  * never sees a Rates menu. That is a courtesy, not a security measure - the
  * server refuses the request regardless.
+ *
+ * The look is the ledger's: a navy spine down the left with brass headings, and a
+ * ruled bar across the top.
  */
 
 interface NavItem {
@@ -122,11 +124,11 @@ function NavSection({
   if (visible.length === 0) return null;
 
   return (
-    <div className="mb-6">
-      <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="mb-5">
+      <p className="mx-3 mb-2 border-b border-sidebar-foreground/15 pb-1.5 font-serif text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">
         {title}
       </p>
-      <nav className="flex flex-col gap-0.5">
+      <nav className="flex flex-col">
         {visible.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -135,16 +137,16 @@ function NavSection({
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex items-center gap-2.5 border-l-[3px] px-3 py-2 text-sm transition-colors',
                 isActive
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  ? 'border-brass bg-sidebar-foreground/10 font-semibold text-sidebar-foreground'
+                  : 'border-transparent text-sidebar-foreground/80 hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground',
               )
             }
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
             <span className="flex-1">{label.en}</span>
-            <span className="text-[11px] text-muted-foreground/70">{label.hi}</span>
+            <span className="text-[11px] text-sidebar-muted">{label.hi}</span>
           </NavLink>
         ))}
       </nav>
@@ -183,12 +185,15 @@ export function AppShell() {
   }
 
   const sidebar = (
-    <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-        <Store className="h-5 w-5 text-primary" aria-hidden />
-        <span className="text-base font-semibold tracking-tight">ShopOS</span>
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="border-b-[3px] border-double border-brass/60 px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <Store className="h-6 w-6 text-brass" aria-hidden />
+          <span className="font-serif text-2xl font-semibold tracking-wide">ShopOS</span>
+        </div>
+        <p className="mt-1 font-serif text-xs italic text-sidebar-muted">The trader&apos;s ledger</p>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-4">
+      <div className="flex-1 overflow-y-auto py-5">
         <NavSection
           title="Daily work"
           items={OPERATIONS}
@@ -202,37 +207,35 @@ export function AppShell() {
           onNavigate={() => setMenuOpen(false)}
         />
       </div>
-      <div className="border-t border-border px-4 py-3">
-        <p className="truncate text-sm font-medium">{session?.organization.name}</p>
-        <p className="text-xs text-muted-foreground">{session?.membership.roleName}</p>
+      <div className="border-t border-sidebar-foreground/15 px-5 py-3">
+        <p className="truncate font-serif text-sm font-semibold">{session?.organization.name}</p>
+        <p className="text-xs text-sidebar-muted">{session?.membership.roleName}</p>
       </div>
     </div>
   );
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block print:hidden">
+      <aside className="hidden w-64 shrink-0 border-r-2 border-primary lg:block print:hidden">
         {sidebar}
       </aside>
 
       {/* The sidebar becomes a drawer below the large breakpoint, because plenty
           of shop staff will open this on a phone behind the counter. */}
       {menuOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-40 lg:hidden print:hidden">
           <button
             type="button"
             aria-label="Close menu"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/55"
             onClick={() => setMenuOpen(false)}
           />
-          <aside className="absolute left-0 top-0 h-full w-64 border-r border-border bg-card">
-            {sidebar}
-          </aside>
+          <aside className="absolute left-0 top-0 h-full w-64 border-r-2 border-primary">{sidebar}</aside>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur print:hidden">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b-2 border-primary bg-card px-4 shadow-[0_2px_0_0_var(--brass)] print:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -243,7 +246,7 @@ export function AppShell() {
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
 
-          <form onSubmit={submitSearch} className="relative min-w-0 flex-1 max-w-lg">
+          <form onSubmit={submitSearch} className="relative min-w-0 max-w-lg flex-1">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden
@@ -254,7 +257,7 @@ export function AppShell() {
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search product, item code or barcode..."
               aria-label="Search products"
-              className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground"
+              className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] placeholder:text-muted-foreground"
             />
           </form>
 
@@ -276,12 +279,12 @@ export function AppShell() {
 
           <div className="relative">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="gap-2"
+              className="h-9 gap-2"
               onClick={() => setUserMenuOpen((open) => !open)}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+              <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-primary font-serif text-[12px] font-semibold text-primary-foreground">
                 {session?.user.name.charAt(0).toUpperCase()}
               </span>
               <span className="hidden max-w-28 truncate sm:inline">{session?.user.name}</span>
@@ -296,15 +299,15 @@ export function AppShell() {
                   className="fixed inset-0 z-10 cursor-default"
                   onClick={() => setUserMenuOpen(false)}
                 />
-                <div className="absolute right-0 top-11 z-20 w-56 rounded-md border border-border bg-popover p-1 shadow-lg">
+                <div className="absolute right-0 top-11 z-20 w-56 rounded-md border-2 border-primary bg-popover p-1 shadow-lg">
                   <div className="border-b border-border px-3 py-2">
-                    <p className="truncate text-sm font-medium">{session?.user.name}</p>
+                    <p className="truncate font-serif text-sm font-semibold">{session?.user.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{session?.user.email}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => logout.mutate()}
-                    className="mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-foreground hover:bg-accent"
+                    className="mt-1 flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
                   >
                     <LogOut className="h-4 w-4" aria-hidden />
                     Sign out
@@ -322,6 +325,3 @@ export function AppShell() {
     </div>
   );
 }
-
-/** Re-exported so pages can show the same icon set without a second import. */
-export { Boxes };
