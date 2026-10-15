@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/field';
 import { queryClient } from '@/lib/queryClient';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 
 /**
  * The application shell.
@@ -280,6 +281,8 @@ export function AppShell() {
               ))}
             </Select>
           )}
+
+          <NotificationBell />
 
           <div className="relative">
             <Button

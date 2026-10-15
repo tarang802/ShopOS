@@ -25,6 +25,7 @@ import { SupplierDetailPage } from '@/features/purchasing/SupplierDetailPage';
 import { InvoicesPage } from '@/features/sales/InvoicesPage';
 import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
 import { PaymentsPage } from '@/features/payments/PaymentsPage';
+import { NotificationsPage } from '@/features/notifications/NotificationsPage';
 import { QuotationsPage } from '@/features/sales/QuotationsPage';
 import { QuotationDetailPage } from '@/features/sales/QuotationDetailPage';
 import { SalesOrdersPage } from '@/features/sales/SalesOrdersPage';
@@ -320,6 +321,7 @@ export function App() {
             </RequirePermission>
           }
         />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="admin/system" element={<SystemStatusPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
