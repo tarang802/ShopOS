@@ -15,6 +15,8 @@ export interface ISupplier {
   city?: string;
   state?: string;
   pincode?: string;
+  /** Days after receiving goods that the supplier expects to be paid. */
+  creditDays: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -31,6 +33,7 @@ const supplierSchema = new Schema<ISupplier>(
     city: { type: String, trim: true, maxlength: 80 },
     state: { type: String, trim: true, maxlength: 80 },
     pincode: { type: String, trim: true, maxlength: 10 },
+    creditDays: { type: Number, required: true, default: 0, min: 0, max: 365 },
     isActive: { type: Boolean, required: true, default: true },
   },
   { timestamps: true },

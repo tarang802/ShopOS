@@ -22,8 +22,13 @@ export interface ICustomer {
   state?: string;
   pincode?: string;
   defaultPriceListId?: Types.ObjectId;
-  /** Recorded for reference. No credit-limit enforcement in v1. */
+  /**
+   * The most this customer may owe at once, in paise. Only enforced when the
+   * business turns on `settings.enforceCreditLimit`; otherwise it is a reference.
+   */
   creditLimitPaise?: number;
+  /** Days after an invoice that the customer is expected to pay. 0 means on the spot. */
+  creditDays: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +47,7 @@ const customerSchema = new Schema<ICustomer>(
     pincode: { type: String, trim: true, maxlength: 10 },
     defaultPriceListId: { type: Schema.Types.ObjectId, ref: 'PriceList' },
     creditLimitPaise: { type: Number, min: 0 },
+    creditDays: { type: Number, required: true, default: 0, min: 0, max: 365 },
     isActive: { type: Boolean, required: true, default: true },
   },
   { timestamps: true },

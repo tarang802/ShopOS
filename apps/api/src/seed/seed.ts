@@ -299,16 +299,16 @@ async function seed(): Promise<void> {
 
   const retailListId = retail._id;
   await Customer.create([
-    { ...orgScope, name: 'Bansal Book Depot', phone: '9811100001', city: 'Bhagalpur', defaultPriceListId: wholesale._id },
-    { ...orgScope, name: 'Sharma Stationers', phone: '9811100002', city: 'Patna', defaultPriceListId: wholesale._id },
-    { ...orgScope, name: 'Vidya Mandir School', phone: '9811100003', city: 'Bhagalpur', defaultPriceListId: wholesale._id },
+    { ...orgScope, name: 'Bansal Book Depot', phone: '9811100001', city: 'Bhagalpur', defaultPriceListId: wholesale._id, creditDays: 15, creditLimitPaise: rupeesToPaise(50000) },
+    { ...orgScope, name: 'Sharma Stationers', phone: '9811100002', city: 'Patna', defaultPriceListId: wholesale._id, creditDays: 30, creditLimitPaise: rupeesToPaise(100000) },
+    { ...orgScope, name: 'Vidya Mandir School', phone: '9811100003', city: 'Bhagalpur', defaultPriceListId: wholesale._id, creditDays: 45, creditLimitPaise: rupeesToPaise(75000) },
     { ...orgScope, name: 'Maa Durga Kirana Store', phone: '9811100004', city: 'Ranchi', defaultPriceListId: retailListId },
   ]);
 
   await Supplier.create([
-    { ...orgScope, name: 'Rajesh Paper Traders', phone: '9800011122', city: 'Delhi', state: 'Delhi' },
-    { ...orgScope, name: 'Natraj Distributors', phone: '9800011133', city: 'Kolkata', state: 'West Bengal' },
-    { ...orgScope, name: 'Camlin Wholesale Depot', phone: '9800011144', city: 'Mumbai', state: 'Maharashtra' },
+    { ...orgScope, name: 'Rajesh Paper Traders', phone: '9800011122', city: 'Delhi', state: 'Delhi', creditDays: 30 },
+    { ...orgScope, name: 'Natraj Distributors', phone: '9800011133', city: 'Kolkata', state: 'West Bengal', creditDays: 15 },
+    { ...orgScope, name: 'Camlin Wholesale Depot', phone: '9800011144', city: 'Mumbai', state: 'Maharashtra', creditDays: 45 },
   ]);
 
   logger.info(

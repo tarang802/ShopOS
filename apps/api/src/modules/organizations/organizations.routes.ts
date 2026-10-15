@@ -24,7 +24,8 @@ const organizationUpdateSchema = z.object({
   businessType: z.string().trim().max(60).optional(),
   gstin: z.string().trim().max(20).optional(),
   phone: z.string().trim().max(20).optional(),
-  email: z.string().trim().email().max(160).optional(),
+  // A cleared field arrives as an empty string, which is a valid way to say "none".
+  email: z.string().trim().email().max(160).optional().or(z.literal('')),
   addressLine: z.string().trim().max(240).optional(),
   city: z.string().trim().max(80).optional(),
   state: z.string().trim().max(80).optional(),
@@ -33,6 +34,10 @@ const organizationUpdateSchema = z.object({
     .object({
       allowNegativeStock: z.boolean().optional(),
       lowStockThreshold: z.number().int().min(0).max(100000).optional(),
+      maxDiscountPercent: z.number().min(0).max(100).optional(),
+      enforceCreditLimit: z.boolean().optional(),
+      invoiceFooter: z.string().trim().max(500).optional(),
+      paymentInstructions: z.string().trim().max(300).optional(),
     })
     .optional(),
 });

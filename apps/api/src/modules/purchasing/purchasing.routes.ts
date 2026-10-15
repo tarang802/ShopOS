@@ -33,6 +33,7 @@ const supplierSchema = z.object({
   city: z.string().trim().max(80).optional(),
   state: z.string().trim().max(80).optional(),
   pincode: z.string().trim().max(10).optional(),
+  creditDays: z.number().int().min(0).max(365).optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -23,6 +23,18 @@ export interface IOrganizationSettings {
   lowStockThreshold: number;
   /** Price list used when none is specified, e.g. at the counter. */
   defaultPriceListId?: Types.ObjectId;
+  /**
+   * The largest line discount staff can give on their own. Anything above needs
+   * `sales:discount_override` - the place the business rules single out as where
+   * retail fraud actually happens.
+   */
+  maxDiscountPercent: number;
+  /** Refuse an invoice that would take a customer past their credit limit. */
+  enforceCreditLimit: boolean;
+  /** Printed at the foot of every invoice: terms, returns policy, thanks. */
+  invoiceFooter?: string;
+  /** Printed on invoices so customers know how to pay: UPI id, bank account. */
+  paymentInstructions?: string;
 }
 
 export interface IOrganization {
@@ -67,6 +79,10 @@ const organizationSchema = new Schema<IOrganization>(
       allowNegativeStock: { type: Boolean, required: true, default: false },
       lowStockThreshold: { type: Number, required: true, default: 10, min: 0 },
       defaultPriceListId: { type: Schema.Types.ObjectId, ref: 'PriceList' },
+      maxDiscountPercent: { type: Number, required: true, default: 10, min: 0, max: 100 },
+      enforceCreditLimit: { type: Boolean, required: true, default: false },
+      invoiceFooter: { type: String, trim: true, maxlength: 500 },
+      paymentInstructions: { type: String, trim: true, maxlength: 300 },
     },
     isActive: { type: Boolean, required: true, default: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },

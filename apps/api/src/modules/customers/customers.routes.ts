@@ -1,6 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { AUDIT_ACTIONS, PERMISSIONS, objectIdSchema, paginationQuerySchema } from '@shopos/shared';
+import {
+  AUDIT_ACTIONS,
+  PERMISSIONS,
+  objectIdSchema,
+  paginationQuerySchema,
+  paiseSchema,
+} from '@shopos/shared';
 import { Customer, PriceList } from '../../db/models';
 import { validate, body, params, query } from '../../middleware/validate';
 import { authenticate, requireContext } from '../../middleware/authenticate';
@@ -30,6 +36,8 @@ const customerSchema = z.object({
   state: z.string().trim().max(80).optional(),
   pincode: z.string().trim().max(10).optional(),
   defaultPriceListId: objectIdSchema.optional(),
+  creditDays: z.number().int().min(0).max(365).optional(),
+  creditLimitPaise: paiseSchema.optional(),
   isActive: z.boolean().optional(),
 });
 
