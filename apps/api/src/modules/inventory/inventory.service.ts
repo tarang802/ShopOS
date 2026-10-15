@@ -3,6 +3,9 @@ import {
   ADJUSTMENT_REASONS,
   AUDIT_ACTIONS,
   INVENTORY_TRANSACTION_TYPES,
+  NOTIFICATION_SEVERITIES,
+  NOTIFICATION_TYPES,
+  PERMISSIONS,
   STOCK_TRANSFER_STATUSES,
   toSkip,
   type AdjustmentReason,
@@ -28,6 +31,7 @@ import { withTransaction } from '../../db/transaction';
 import { applyCountCorrection, applyMovement, getStockPolicy } from '../../services/inventoryService';
 import { nextDocumentNumber } from '../../services/counterService';
 import { recordAudit } from '../../services/auditService';
+import { notify } from '../../services/notificationService';
 
 /**
  * Stock operations: what is on hand, what moved, and the documents that moved it.
@@ -441,7 +445,7 @@ export async function createTransfer(ctx: TenantContext, input: TransferInput) {
 
   const policy = await getStockPolicy(ctx);
 
-  return withTransaction(async (session) => {
+  const created = await withTransaction(async (session) => {
     const number = await nextDocumentNumber(ctx.organizationId, 'TRF', session);
     const documentId = new Types.ObjectId();
     const lines = [];
@@ -517,6 +521,25 @@ export async function createTransfer(ctx: TenantContext, input: TransferInput) {
 
     return transfer?.toObject();
   });
+
+  // Tell the destination goods are on their way, once the dispatch has committed.
+  if (created) {
+    await notify([
+      {
+        organizationId: ctx.organizationId,
+        type: NOTIFICATION_TYPES.TRANSFER_INCOMING,
+        severity: NOTIFICATION_SEVERITIES.INFO,
+        title: `Stock is on its way from ${fromBranch.name}`,
+        body: `Transfer ${created.number} to ${toBranch.name}: ${input.items.length} item${input.items.length === 1 ? '' : 's'}`,
+        link: '/transfers',
+        requiredPermission: PERMISSIONS.INVENTORY_VIEW,
+        branchId: toBranchId,
+        dedupeKey: `TRANSFER_INCOMING:${created._id.toString()}`,
+      },
+    ]);
+  }
+
+  return created;
 }
 
 /**

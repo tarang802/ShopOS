@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { runMigrations } from './db/migrations';
+import { startBackgroundJobs, stopBackgroundJobs } from './jobs';
 import { logger } from './core/logger';
 import { API_PREFIX, APP_NAME, APP_VERSION } from './core/constants';
 
@@ -29,6 +30,8 @@ async function start(): Promise<void> {
       `${APP_NAME} v${APP_VERSION} listening on http://localhost:${env.PORT}${API_PREFIX}`,
     );
   });
+
+  startBackgroundJobs();
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -39,6 +42,8 @@ async function shutdown(signal: string): Promise<void> {
     process.exit(1);
   }, 10_000);
   forceExit.unref();
+
+  stopBackgroundJobs();
 
   try {
     if (server) {

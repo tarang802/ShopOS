@@ -63,6 +63,15 @@ const envSchema = z
     AUTH_RATE_LIMIT: z.coerce.number().int().min(1).optional(),
     GENERAL_RATE_LIMIT: z.coerce.number().int().min(1).optional(),
 
+    /**
+     * Whether this process runs the hourly background sweep. On by default; turn it
+     * off on all but one instance if several share a database.
+     */
+    JOBS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
   })
   .superRefine((value, ctx) => {

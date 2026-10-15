@@ -7,6 +7,7 @@ import { brandsRouter, categoriesRouter, unitsRouter } from '../modules/catalog/
 import { dashboardRouter } from '../modules/dashboard/dashboard.routes';
 import { healthRouter } from '../modules/health/health.routes';
 import { inventoryRouter } from '../modules/inventory/inventory.routes';
+import { notificationsRouter } from '../modules/notifications/notifications.routes';
 import { organizationsRouter } from '../modules/organizations/organizations.routes';
 import { paymentsRouter } from '../modules/payments/payments.routes';
 import { purchaseOrdersRouter, suppliersRouter } from '../modules/purchasing/purchasing.routes';
@@ -59,6 +60,6 @@ apiRouter.use('/supplier-payments', supplierPaymentsRouter);
 apiRouter.use('/payments', paymentsRouter);
 
 apiRouter.use('/dashboard', dashboardRouter);
+apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/audit-logs', auditRouter);
 
-// Phase 15+ reports

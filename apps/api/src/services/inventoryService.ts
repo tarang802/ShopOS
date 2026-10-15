@@ -2,15 +2,20 @@ import type { ClientSession, Types } from 'mongoose';
 import {
   ERROR_CODES,
   INBOUND_TRANSACTION_TYPES,
+  NOTIFICATION_SEVERITIES,
+  NOTIFICATION_TYPES,
+  PERMISSIONS,
   type InventoryTransactionType,
 } from '@shopos/shared';
 import {
+  Branch,
   InventoryBalance,
   InventoryTransaction,
   Organization,
   Product,
   Unit,
 } from '../db/models';
+import { notify } from './notificationService';
 import { sessionOption } from '../db/transaction';
 import { AppError } from '../core/AppError';
 import { orgFilter, type TenantContext } from '../core/tenantContext';
@@ -101,7 +106,7 @@ export async function applyMovement(
   }
 
   const product = await Product.findOne({ ...orgFilter(ctx), _id: input.productId })
-    .select('name sku unitSymbol unitId')
+    .select('name sku unitSymbol unitId reorderLevel')
     .lean();
   if (!product) throw AppError.notFound('Product');
 
@@ -168,6 +173,29 @@ export async function applyMovement(
   }
 
   if (!balance) throw AppError.internal('Could not update stock');
+
+  // Two different moments are worth announcing, and each only once: stock dropping
+  // to the reorder level, and stock running out altogether. Running out is not just
+  // the reorder line crossed again - it can happen long after, as the last units go.
+  if (delta < 0 && product.reorderLevel > 0) {
+    const previous = balance.quantity - delta;
+    const nowOut = balance.quantity <= 0 && previous > 0;
+    const nowLow =
+      balance.quantity > 0 &&
+      previous > product.reorderLevel &&
+      balance.quantity <= product.reorderLevel;
+
+    if (nowOut || nowLow) {
+      void announceLowStock(ctx, {
+        branchId: input.branchId,
+        productId: input.productId,
+        productName: product.name,
+        unitSymbol: product.unitSymbol,
+        quantity: balance.quantity,
+        reorderLevel: product.reorderLevel,
+      });
+    }
+  }
 
   await InventoryTransaction.create(
     [
@@ -265,4 +293,49 @@ export async function applyCountCorrection(
     newQuantity: input.countedQuantity,
     difference,
   };
+}
+
+/**
+ * Tell the people who manage stock that something has run low or out.
+ *
+ * Fire-and-forget by design: a sale must never wait on, or fail because of, an
+ * alert. At most one alert per product per branch per day, however many sales
+ * follow.
+ */
+async function announceLowStock(
+  ctx: TenantContext,
+  details: {
+    branchId: Types.ObjectId;
+    productId: Types.ObjectId;
+    productName: string;
+    unitSymbol: string;
+    quantity: number;
+    reorderLevel: number;
+  },
+): Promise<void> {
+  try {
+    const branch = await Branch.findOne({ ...orgFilter(ctx), _id: details.branchId })
+      .select('name')
+      .lean();
+    const out = details.quantity <= 0;
+    const day = new Date().toISOString().slice(0, 10);
+
+    await notify([
+      {
+        organizationId: ctx.organizationId,
+        type: out ? NOTIFICATION_TYPES.OUT_OF_STOCK : NOTIFICATION_TYPES.LOW_STOCK,
+        severity: out ? NOTIFICATION_SEVERITIES.CRITICAL : NOTIFICATION_SEVERITIES.WARNING,
+        title: out
+          ? `${details.productName} is out of stock`
+          : `${details.productName} is running low`,
+        body: `${branch?.name ?? 'A branch'} has ${details.quantity} ${details.unitSymbol} left. Reorder level is ${details.reorderLevel}.`,
+        link: `/products/${details.productId.toString()}`,
+        requiredPermission: PERMISSIONS.INVENTORY_VIEW,
+        branchId: details.branchId,
+        dedupeKey: `${out ? 'OUT' : 'LOW'}_STOCK:${details.branchId.toString()}:${details.productId.toString()}:${day}`,
+      },
+    ]);
+  } catch {
+    // An alert that cannot be written is not worth any noise.
+  }
 }
