@@ -6,13 +6,11 @@ import {
   INVOICE_STATUSES,
   PERMISSIONS,
   computeLineAmounts,
-  daysOverdue,
   endOfDayInTimeZone,
-  invoiceOutstandingPaise,
-  invoiceRefundDuePaise,
   sumPaise,
   toSkip,
   type PaginationQuery,
+  type PaymentMethod,
 } from '@shopos/shared';
 import { Branch, Customer, Invoice, Organization, Product, type IInvoice } from '../../db/models';
 import { AppError } from '../../core/AppError';
@@ -26,7 +24,9 @@ import {
   OPEN_INVOICE_STATUSES,
   customerOutstandingPaise,
 } from '../../services/receivablesService';
+import { recordPaymentInSession } from '../payments/payments.service';
 import { resolvePrices } from '../pricing/pricing.service';
+import { presentInvoice } from './invoicePresenter';
 
 /**
  * Invoices - the event that moves stock and money.
@@ -68,6 +68,12 @@ export interface CreateInvoiceInput {
   creditDays?: number;
   notes?: string;
   items: InvoiceLineInput[];
+  /**
+   * Money received on the spot. Recorded in the same transaction as the invoice,
+   * so a counter sale is one action that cannot half-succeed - billed but not
+   * paid, or paid against a bill that was never written.
+   */
+  payment?: { method: PaymentMethod; amountPaise: number; reference?: string };
 }
 
 export interface PreparedLine {
@@ -337,38 +343,42 @@ export async function persistInvoice(
 
 export async function createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
   const prepared = await prepareInvoice(ctx, input);
-  const invoice = await withTransaction((session) => persistInvoice(ctx, prepared, session));
-  return presentInvoice(ctx, invoice.toObject());
-}
 
-/**
- * An invoice as the API returns it: balances worked out, and the cost removed
- * unless the caller may see it.
- *
- * Outstanding and overdue are derived here, from the same shared arithmetic the
- * web app uses, rather than stored - a stored balance is one more number that
- * could disagree with the payments behind it.
- */
-export function presentInvoice(ctx: TenantContext, invoice: IInvoice, now: Date = new Date()) {
-  const showCost = ctx.permissions.has(PERMISSIONS.COSTS_VIEW);
-  const amounts = {
-    totalPaise: invoice.totalPaise,
-    paidPaise: invoice.paidPaise,
-    returnedPaise: invoice.returnedPaise ?? 0,
-    refundedPaise: invoice.refundedPaise ?? 0,
-  };
-  const cancelled = invoice.status === INVOICE_STATUSES.CANCELLED;
-  const open = (OPEN_INVOICE_STATUSES as readonly string[]).includes(invoice.status);
+  if (input.payment) {
+    if (!ctx.permissions.has(PERMISSIONS.PAYMENTS_CREATE)) {
+      throw AppError.permissionDenied(PERMISSIONS.PAYMENTS_CREATE);
+    }
+    if (input.payment.amountPaise <= 0 || input.payment.amountPaise > prepared.totalPaise) {
+      throw AppError.businessRule('The payment taken at the counter must be more than zero and no more than the bill');
+    }
+  }
 
-  return {
-    ...invoice,
-    items: invoice.items?.map(({ unitCostPaise, ...line }) =>
-      showCost ? { ...line, unitCostPaise } : line,
-    ),
-    outstandingPaise: cancelled ? 0 : invoiceOutstandingPaise(amounts),
-    refundDuePaise: cancelled ? 0 : invoiceRefundDuePaise(amounts),
-    overdueDays: open && invoice.dueDate ? daysOverdue(invoice.dueDate, now) : 0,
-  };
+  const invoiceId = await withTransaction(async (session) => {
+    const invoice = await persistInvoice(ctx, prepared, session);
+
+    if (input.payment) {
+      await recordPaymentInSession(
+        ctx,
+        {
+          branchId: input.branchId,
+          ...(prepared.customerId
+            ? { customerId: prepared.customerId.toString() }
+            : { customerName: prepared.customerName }),
+          amountPaise: input.payment.amountPaise,
+          method: input.payment.method,
+          ...(input.payment.reference ? { reference: input.payment.reference } : {}),
+          allocations: [{ invoiceId: invoice._id.toString(), amountPaise: input.payment.amountPaise }],
+        },
+        session,
+      );
+    }
+
+    return invoice._id;
+  });
+
+  // Re-read so the response reflects the payment, if there was one.
+  const saved = await Invoice.findOne({ ...orgFilter(ctx), _id: invoiceId }).lean();
+  return presentInvoice(ctx, saved!);
 }
 
 export interface InvoiceListFilters {
@@ -553,3 +563,5 @@ export async function cancelInvoice(
     return presentInvoice(ctx, updated!);
   });
 }
+
+export { presentInvoice };

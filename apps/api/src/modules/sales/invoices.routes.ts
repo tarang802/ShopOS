@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import {
   INVOICE_STATUSES,
+  PAYMENT_METHODS,
   PERMISSIONS,
   objectIdSchema,
   paginationQuerySchema,
@@ -31,6 +32,13 @@ const createInvoiceSchema = z.object({
   creditDays: z.number().int().min(0).max(365).optional(),
   notes: z.string().trim().max(1000).optional(),
   items: z.array(lineSchema).min(1, 'Add at least one product').max(500),
+  payment: z
+    .object({
+      method: z.enum(Object.values(PAYMENT_METHODS) as [string, ...string[]]),
+      amountPaise: paiseSchema.refine((value) => value > 0, 'Amount must be more than zero'),
+      reference: z.string().trim().max(60).optional(),
+    })
+    .optional(),
 });
 
 const cancelSchema = z.object({ reason: z.string().trim().max(240).optional() });
