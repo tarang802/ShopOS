@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { lazy, type ComponentType, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Store } from 'lucide-react';
 import type { Permission } from '@shopos/shared';
@@ -7,32 +7,44 @@ import { AppShell } from '@/layouts/AppShell';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
-import { ProductsPage } from '@/features/products/ProductsPage';
-import { ProductDetailPage } from '@/features/products/ProductDetailPage';
-import { RatesPage } from '@/features/pricing/RatesPage';
-import { StockPage } from '@/features/inventory/StockPage';
-import { TransfersPage } from '@/features/inventory/TransfersPage';
-import { MovementsPage } from '@/features/inventory/MovementsPage';
-import { BranchesPage } from '@/features/admin/BranchesPage';
-import { StaffPage } from '@/features/admin/StaffPage';
-import { RolesPage } from '@/features/admin/RolesPage';
-import { SettingsPage } from '@/features/admin/SettingsPage';
-import { ActivityPage } from '@/features/admin/ActivityPage';
-import { SystemStatusPage } from '@/pages/SystemStatusPage';
-import { CustomersPage } from '@/features/customers/CustomersPage';
-import { CustomerDetailPage } from '@/features/customers/CustomerDetailPage';
-import { SupplierDetailPage } from '@/features/purchasing/SupplierDetailPage';
-import { InvoicesPage } from '@/features/sales/InvoicesPage';
-import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
-import { PaymentsPage } from '@/features/payments/PaymentsPage';
-import { NotificationsPage } from '@/features/notifications/NotificationsPage';
-import { QuotationsPage } from '@/features/sales/QuotationsPage';
-import { QuotationDetailPage } from '@/features/sales/QuotationDetailPage';
-import { SalesOrdersPage } from '@/features/sales/SalesOrdersPage';
-import { SalesOrderDetailPage } from '@/features/sales/SalesOrderDetailPage';
-import { SuppliersPage } from '@/features/purchasing/SuppliersPage';
-import { PurchaseOrdersPage } from '@/features/purchasing/PurchaseOrdersPage';
-import { PurchaseOrderDetailPage } from '@/features/purchasing/PurchaseOrderDetailPage';
+const ProductsPage = lazyPage(() => import('@/features/products/ProductsPage'), 'ProductsPage');
+const ProductDetailPage = lazyPage(() => import('@/features/products/ProductDetailPage'), 'ProductDetailPage');
+const RatesPage = lazyPage(() => import('@/features/pricing/RatesPage'), 'RatesPage');
+const StockPage = lazyPage(() => import('@/features/inventory/StockPage'), 'StockPage');
+const TransfersPage = lazyPage(() => import('@/features/inventory/TransfersPage'), 'TransfersPage');
+const MovementsPage = lazyPage(() => import('@/features/inventory/MovementsPage'), 'MovementsPage');
+const BranchesPage = lazyPage(() => import('@/features/admin/BranchesPage'), 'BranchesPage');
+const StaffPage = lazyPage(() => import('@/features/admin/StaffPage'), 'StaffPage');
+const RolesPage = lazyPage(() => import('@/features/admin/RolesPage'), 'RolesPage');
+const SettingsPage = lazyPage(() => import('@/features/admin/SettingsPage'), 'SettingsPage');
+const ActivityPage = lazyPage(() => import('@/features/admin/ActivityPage'), 'ActivityPage');
+const SystemStatusPage = lazyPage(() => import('@/pages/SystemStatusPage'), 'SystemStatusPage');
+const CustomersPage = lazyPage(() => import('@/features/customers/CustomersPage'), 'CustomersPage');
+const CustomerDetailPage = lazyPage(() => import('@/features/customers/CustomerDetailPage'), 'CustomerDetailPage');
+const SupplierDetailPage = lazyPage(() => import('@/features/purchasing/SupplierDetailPage'), 'SupplierDetailPage');
+const InvoicesPage = lazyPage(() => import('@/features/sales/InvoicesPage'), 'InvoicesPage');
+const InvoiceDetailPage = lazyPage(() => import('@/features/sales/InvoiceDetailPage'), 'InvoiceDetailPage');
+const ReportsPage = lazyPage(() => import('@/features/reports/ReportsPage'), 'ReportsPage');
+const PaymentsPage = lazyPage(() => import('@/features/payments/PaymentsPage'), 'PaymentsPage');
+const NotificationsPage = lazyPage(() => import('@/features/notifications/NotificationsPage'), 'NotificationsPage');
+const QuotationsPage = lazyPage(() => import('@/features/sales/QuotationsPage'), 'QuotationsPage');
+const QuotationDetailPage = lazyPage(() => import('@/features/sales/QuotationDetailPage'), 'QuotationDetailPage');
+const SalesOrdersPage = lazyPage(() => import('@/features/sales/SalesOrdersPage'), 'SalesOrdersPage');
+const SalesOrderDetailPage = lazyPage(() => import('@/features/sales/SalesOrderDetailPage'), 'SalesOrderDetailPage');
+const SuppliersPage = lazyPage(() => import('@/features/purchasing/SuppliersPage'), 'SuppliersPage');
+const PurchaseOrdersPage = lazyPage(() => import('@/features/purchasing/PurchaseOrdersPage'), 'PurchaseOrdersPage');
+const PurchaseOrderDetailPage = lazyPage(() => import('@/features/purchasing/PurchaseOrderDetailPage'), 'PurchaseOrderDetailPage');
+
+/**
+ * Each screen is its own download, fetched the first time someone opens it.
+ *
+ * Shop staff open this on modest connections, and nobody who only sells needs the
+ * reports screen's code on their first page. The shell shows a skeleton while a screen
+ * arrives, so navigating never blanks the page.
+ */
+function lazyPage<T extends Record<string, unknown>>(loader: () => Promise<T>, name: keyof T & string) {
+  return lazy(async () => ({ default: (await loader())[name] as ComponentType }));
+}
 
 /**
  * Routing.
@@ -237,6 +249,14 @@ export function App() {
           element={
             <RequirePermission permission="sales:view">
               <SalesOrderDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="reports"
+          element={
+            <RequirePermission permission="reports:view">
+              <ReportsPage />
             </RequirePermission>
           }
         />

@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { Suspense, useState, type FormEvent } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   Banknote,
+  BarChart3,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -35,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/field';
 import { queryClient } from '@/lib/queryClient';
+import { Skeleton } from '@/components/ui/states';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
 
 /**
@@ -87,6 +89,7 @@ const OPERATIONS: NavItem[] = [
   { to: '/quotations', label: LABELS.quotations, icon: FileText, permission: PERMISSIONS.SALES_VIEW },
   { to: '/sales-orders', label: LABELS.salesOrders, icon: ClipboardList, permission: PERMISSIONS.SALES_VIEW },
   { to: '/payments', label: LABELS.payments, icon: Banknote, permission: PERMISSIONS.PAYMENTS_VIEW },
+  { to: '/reports', label: LABELS.reports, icon: BarChart3, permission: PERMISSIONS.REPORTS_VIEW },
   { to: '/suppliers', label: LABELS.suppliers, icon: Truck, permission: PERMISSIONS.SUPPLIERS_VIEW },
   { to: '/purchases', label: LABELS.purchases, icon: ShoppingCart, permission: PERMISSIONS.PURCHASES_VIEW },
 ];
@@ -326,7 +329,16 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="mx-auto max-w-5xl space-y-4">
+                <Skeleton className="h-10 w-64" />
+                <Skeleton className="h-64" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { LABELS } from '@/lib/labels';
 import { LabelledPageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field, Input } from '@/components/ui/field';
+import { Field, Input, Textarea } from '@/components/ui/field';
 
 /**
  * Business profile and stock policy.
@@ -33,6 +33,10 @@ interface Organization {
   settings: {
     allowNegativeStock: boolean;
     lowStockThreshold: number;
+    maxDiscountPercent?: number;
+    enforceCreditLimit?: boolean;
+    invoiceFooter?: string;
+    paymentInstructions?: string;
   };
 }
 
@@ -55,6 +59,10 @@ export function SettingsPage() {
     pincode: '',
   });
   const [allowNegativeStock, setAllowNegativeStock] = useState(false);
+  const [maxDiscount, setMaxDiscount] = useState('10');
+  const [enforceCreditLimit, setEnforceCreditLimit] = useState(false);
+  const [invoiceFooter, setInvoiceFooter] = useState('');
+  const [paymentInstructions, setPaymentInstructions] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +80,10 @@ export function SettingsPage() {
       pincode: data.pincode ?? '',
     });
     setAllowNegativeStock(data.settings.allowNegativeStock);
+    setMaxDiscount(String(data.settings.maxDiscountPercent ?? 10));
+    setEnforceCreditLimit(data.settings.enforceCreditLimit ?? false);
+    setInvoiceFooter(data.settings.invoiceFooter ?? '');
+    setPaymentInstructions(data.settings.paymentInstructions ?? '');
   }, [data]);
 
   const save = useMutation({
@@ -181,9 +193,64 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Selling rules</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field
+            label="Discount staff can give on their own (%)"
+            hint="Anything above this needs the discount override permission - the place retail fraud actually happens"
+            className="max-w-sm"
+          >
+            <Input type="number" min={0} max={100} value={maxDiscount} onChange={(event) => setMaxDiscount(event.target.value)} />
+          </Field>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-input"
+              checked={enforceCreditLimit}
+              onChange={(event) => setEnforceCreditLimit(event.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-medium">Refuse sales that would take a customer past their credit limit</span>
+              <span className="block text-sm text-muted-foreground">
+                Off by default, so the limit on a customer is a reference. Turn it on to have invoices refused once a customer with a
+                limit would owe more than it.
+              </span>
+            </span>
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>On printed invoices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field label="How to pay" hint="UPI id or bank account, printed above the footer">
+            <Input value={paymentInstructions} maxLength={300} onChange={(event) => setPaymentInstructions(event.target.value)} />
+          </Field>
+          <Field label="Footer" hint="Terms, returns policy or a thank-you">
+            <Textarea value={invoiceFooter} maxLength={500} onChange={(event) => setInvoiceFooter(event.target.value)} />
+          </Field>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center gap-3">
         <Button
-          onClick={() => save.mutate({ ...form, settings: { allowNegativeStock } })}
+          onClick={() =>
+            save.mutate({
+              ...form,
+              settings: {
+                allowNegativeStock,
+                maxDiscountPercent: Math.min(100, Math.max(0, Number(maxDiscount) || 0)),
+                enforceCreditLimit,
+                invoiceFooter,
+                paymentInstructions,
+              },
+            })
+          }
           disabled={save.isPending}
         >
           {save.isPending ? 'Saving...' : 'Save changes'}

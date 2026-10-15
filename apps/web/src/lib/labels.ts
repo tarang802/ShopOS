@@ -44,6 +44,7 @@ export const LABELS = {
   suppliers: { en: 'Suppliers', hi: 'सप्लायर' },
   purchases: { en: 'Purchase Orders', hi: 'खरीद ऑर्डर' },
   payments: { en: 'Payments', hi: 'भुगतान' },
+  reports: { en: 'Reports', hi: 'रिपोर्ट' },
 
   // Common actions
   search: { en: 'Search', hi: 'खोजें' },
