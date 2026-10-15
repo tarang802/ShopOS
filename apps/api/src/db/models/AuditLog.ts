@@ -18,6 +18,8 @@ import { tenantGuard } from '../plugins/tenantGuard';
  * Append-only is a property of the API surface, not just of good intentions.
  */
 
+
+
 export interface IAuditLog {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId;
@@ -60,11 +62,13 @@ const auditLogSchema = new Schema<IAuditLog>(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+
+
+
 // The audit screen: newest first, for this business.
 auditLogSchema.index({ organizationId: 1, createdAt: -1 });
 // "History of this one product" - shown on the product detail page.
 auditLogSchema.index({ organizationId: 1, entityType: 1, entityId: 1, createdAt: -1 });
-// "What has this staff member been doing?"
 auditLogSchema.index({ organizationId: 1, userId: 1, createdAt: -1 });
 auditLogSchema.index({ organizationId: 1, action: 1, createdAt: -1 });
 

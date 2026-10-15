@@ -42,9 +42,6 @@ const branchSchema = new Schema<IBranch>(
   { timestamps: true },
 );
 
-// Uniqueness is scoped to the tenant: two different businesses may both have a
-// branch coded "MAIN". Every compound index leads with organizationId so one
-// large tenant's queries never scan another tenant's documents.
 branchSchema.index({ organizationId: 1, code: 1 }, { unique: true });
 branchSchema.index({ organizationId: 1, isActive: 1, name: 1 });
 
