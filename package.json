@@ -19,6 +19,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "db:local": "node scripts/local-mongo.mjs",
     "seed": "npm run seed --workspace @shopos/api",
     "smoke": "npm run seed --workspace @shopos/api && bash scripts/smoke-test.sh"
   },
