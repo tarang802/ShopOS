@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Trash2 } from 'lucide-react';
+import { computeLineAmounts, type LineAmounts } from '@shopos/shared';
 import { api, toQuery } from '@/lib/apiClient';
 import { formatMoney } from '@/lib/format';
 import { Input } from '@/components/ui/field';
@@ -8,39 +9,49 @@ import { Button } from '@/components/ui/button';
 import { useProducts, type ProductSummary } from '../products/productsApi';
 
 /**
- * Building the lines of an invoice.
+ * Building the lines of a sale: an invoice, a quotation or a sales order.
  *
- * Each line's rate is never typed in - it is fetched live from the same
- * pricing engine the server will use to actually create the invoice. What a
- * staff member sees here, quantity by quantity, is exactly what the bill will
- * say, because both paths call the identical resolver.
+ * Each line's rate is never typed in - it is fetched live from the same pricing
+ * engine the server will use when the document is saved, and the discount, tax and
+ * totals are worked out with the same shared arithmetic. What a staff member sees
+ * here, quantity by quantity, is what the bill will say.
  */
 
 export interface DraftLine {
   product: ProductSummary;
   quantity: string;
+  /** Percent off, as typed. Blank means none. */
+  discountPercent: string;
+}
+
+export interface DocumentTotals {
+  discountPaise: number;
+  subtotalPaise: number;
+  taxPaise: number;
+  totalPaise: number;
 }
 
 interface ResolvedPrice {
   unitPricePaise: number;
-  lineTotalPaise: number;
+  taxRatePercent: number;
   appliedTier: { range: string };
 }
 
 function LineRow({
   line,
   priceListId,
-  onQuantityChange,
+  onChange,
   onRemove,
-  onResolved,
+  onAmounts,
 }: {
   line: DraftLine;
   priceListId: string;
-  onQuantityChange: (quantity: string) => void;
+  onChange: (patch: Partial<DraftLine>) => void;
   onRemove: () => void;
-  onResolved: (lineTotalPaise: number | null) => void;
+  onAmounts: (amounts: LineAmounts | null) => void;
 }) {
   const quantity = Number(line.quantity);
+  const discount = Number(line.discountPercent || 0);
   const enabled = Boolean(priceListId) && Number.isFinite(quantity) && quantity > 0;
 
   const { data, isFetching, error } = useQuery({
@@ -51,12 +62,25 @@ function LineRow({
     retry: false,
   });
 
+  const amounts = useMemo(
+    () =>
+      data && discount >= 0 && discount <= 100
+        ? computeLineAmounts({
+            unitPricePaise: data.unitPricePaise,
+            quantity,
+            discountPercent: discount,
+            taxRatePercent: data.taxRatePercent,
+          })
+        : null,
+    [data, quantity, discount],
+  );
+
   useEffect(() => {
-    onResolved(data ? data.lineTotalPaise : null);
-    // Only the resolved total matters to the parent; re-running on every
-    // render would create an update loop.
+    onAmounts(amounts);
+    // Only the worked-out amounts matter to the parent; re-running on every render
+    // would create an update loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [amounts]);
 
   return (
     <tr className="border-t border-border">
@@ -70,7 +94,7 @@ function LineRow({
           min={0}
           className="h-9 w-24 tabular"
           value={line.quantity}
-          onChange={(event) => onQuantityChange(event.target.value)}
+          onChange={(event) => onChange({ quantity: event.target.value })}
         />
         <span className="ml-1.5 text-xs text-muted-foreground">{line.product.unitSymbol}</span>
       </td>
@@ -80,7 +104,7 @@ function LineRow({
         ) : isFetching ? (
           <span className="text-muted-foreground">...</span>
         ) : error ? (
-          <span className="text-destructive text-xs">No rate</span>
+          <span className="text-xs text-destructive">No rate</span>
         ) : (
           <>
             {formatMoney(data!.unitPricePaise)}
@@ -88,8 +112,29 @@ function LineRow({
           </>
         )}
       </td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            step="0.5"
+            aria-label="Discount percent"
+            className="h-9 w-20 tabular"
+            placeholder="0"
+            value={line.discountPercent}
+            onChange={(event) => onChange({ discountPercent: event.target.value })}
+          />
+          <span className="text-xs text-muted-foreground">%</span>
+        </div>
+      </td>
       <td className="px-3 py-2 text-right font-semibold tabular">
-        {enabled && data ? formatMoney(data.lineTotalPaise) : '-'}
+        {amounts ? formatMoney(amounts.lineTotalPaise) : '-'}
+        {amounts && amounts.discountPaise > 0 && (
+          <span className="block text-xs font-normal text-muted-foreground">
+            saves {formatMoney(amounts.discountPaise)}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2">
         <Button variant="ghost" size="icon" aria-label="Remove" onClick={onRemove}>
@@ -109,11 +154,11 @@ export function InvoiceLinePicker({
   lines: DraftLine[];
   onChange: (lines: DraftLine[]) => void;
   priceListId: string;
-  onTotalsChange: (totalPaise: number) => void;
+  onTotalsChange: (totals: DocumentTotals) => void;
 }) {
   const [term, setTerm] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [lineTotals, setLineTotals] = useState<Record<string, number>>({});
+  const [lineAmounts, setLineAmounts] = useState<Record<string, LineAmounts>>({});
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(term), 250);
@@ -125,25 +170,31 @@ export function InvoiceLinePicker({
   const chosenIds = new Set(lines.map((line) => line.product._id));
 
   useEffect(() => {
-    const relevant = Object.entries(lineTotals).filter(([id]) => chosenIds.has(id));
-    onTotalsChange(relevant.reduce((sum, [, total]) => sum + total, 0));
+    const relevant = Object.entries(lineAmounts).filter(([id]) => chosenIds.has(id));
+    const sum = (key: keyof LineAmounts) => relevant.reduce((total, [, amounts]) => total + amounts[key], 0);
+    onTotalsChange({
+      discountPaise: sum('discountPaise'),
+      subtotalPaise: sum('subtotalPaise'),
+      taxPaise: sum('taxPaise'),
+      totalPaise: sum('lineTotalPaise'),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lineTotals, lines.length]);
+  }, [lineAmounts, lines.length]);
 
   function add(product: ProductSummary) {
     if (chosenIds.has(product._id)) return;
-    onChange([...lines, { product, quantity: '1' }]);
+    onChange([...lines, { product, quantity: '1', discountPercent: '' }]);
     setTerm('');
     setDebounced('');
   }
 
-  function setQuantity(productId: string, quantity: string) {
-    onChange(lines.map((line) => (line.product._id === productId ? { ...line, quantity } : line)));
+  function patch(productId: string, changes: Partial<DraftLine>) {
+    onChange(lines.map((line) => (line.product._id === productId ? { ...line, ...changes } : line)));
   }
 
   function remove(productId: string) {
     onChange(lines.filter((line) => line.product._id !== productId));
-    setLineTotals((current) => {
+    setLineAmounts((current) => {
       const next = { ...current };
       delete next[productId];
       return next;
@@ -197,7 +248,8 @@ export function InvoiceLinePicker({
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</th>
                 <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rate</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subtotal</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Discount</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Line total</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -207,10 +259,15 @@ export function InvoiceLinePicker({
                   key={line.product._id}
                   line={line}
                   priceListId={priceListId}
-                  onQuantityChange={(quantity) => setQuantity(line.product._id, quantity)}
+                  onChange={(changes) => patch(line.product._id, changes)}
                   onRemove={() => remove(line.product._id)}
-                  onResolved={(total) =>
-                    setLineTotals((current) => ({ ...current, [line.product._id]: total ?? 0 }))
+                  onAmounts={(amounts) =>
+                    setLineAmounts((current) => {
+                      const next = { ...current };
+                      if (amounts) next[line.product._id] = amounts;
+                      else delete next[line.product._id];
+                      return next;
+                    })
                   }
                 />
               ))}

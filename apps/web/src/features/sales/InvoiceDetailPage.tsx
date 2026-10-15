@@ -1,43 +1,44 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, IndianRupee } from 'lucide-react';
+import { ArrowLeft, Ban, IndianRupee, Printer } from 'lucide-react';
 import { PERMISSIONS } from '@shopos/shared';
 import { useHasPermission } from '@/stores/authStore';
-import { formatDateTime, formatMoney, formatNumber } from '@/lib/format';
+import { ApiRequestError } from '@/lib/apiClient';
+import { formatDate, formatDateTime, formatMoney, formatNumber } from '@/lib/format';
+import { INVOICE_STATUS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS, RETURN_REASON_LABELS, statusOf } from '@/lib/statusStyles';
+import { PrintFooter, PrintHeader } from '@/components/PrintHeader';
+import { ReasonDialog } from '@/components/ReasonDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ConfirmDialog } from '@/components/ui/dialog';
 import { ErrorState, Skeleton } from '@/components/ui/states';
 import { useCancelInvoice, useInvoice } from './invoicesApi';
 import { RecordPaymentDialog } from '../payments/RecordPaymentDialog';
-
-const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'outline'> = {
-  DRAFT: 'outline',
-  ISSUED: 'default',
-  PARTIALLY_PAID: 'warning',
-  PAID: 'success',
-  CANCELLED: 'destructive',
-};
+import { useVoidPayment } from '../payments/paymentsApi';
 
 /**
  * One invoice, exactly as it was created.
  *
- * Every value on this page - product names, rates, tax, totals - is read
- * straight from the invoice document, never recalculated from today's
- * catalogue. That is the whole point: if the price of this product changes
- * tomorrow, this page still shows what was actually charged.
+ * Every value on this page - product names, rates, discount, tax, totals - is read
+ * straight from the invoice document, never recalculated from today's catalogue.
+ * If the price of this product changes tomorrow, this page still shows what was
+ * actually charged. Balances come from the server, which derives them from the
+ * payments and returns behind them.
  */
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const canCancel = useHasPermission(PERMISSIONS.SALES_CANCEL);
   const canRecordPayment = useHasPermission(PERMISSIONS.PAYMENTS_CREATE);
+  const canVoid = useHasPermission(PERMISSIONS.PAYMENTS_VOID);
 
   const { data: invoice, isPending, isError, error, refetch } = useInvoice(id);
   const cancelInvoice = useCancelInvoice();
+  const voidPayment = useVoidPayment();
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [voiding, setVoiding] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (isError) {
     return (
@@ -56,12 +57,17 @@ export function InvoiceDetailPage() {
     );
   }
 
-  const canPay = invoice.status === 'ISSUED' || invoice.status === 'PARTIALLY_PAID';
-  const canCancelNow = invoice.status !== 'CANCELLED' && invoice.paidPaise === 0;
+  const style = statusOf(INVOICE_STATUS, invoice.status);
+  const hasDiscount = invoice.items.some((item) => (item.discountPaise ?? 0) > 0);
+  const canPay = invoice.outstandingPaise > 0 && invoice.status !== 'CANCELLED';
+  const canCancelNow =
+    invoice.status !== 'CANCELLED' && invoice.paidPaise === 0 && (invoice.returnedPaise ?? 0) === 0;
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link to="/sales" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <PrintHeader title="Invoice" />
+
+      <Link to="/sales" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground print:hidden">
         <ArrowLeft className="h-4 w-4" aria-hidden />
         All invoices
       </Link>
@@ -70,13 +76,24 @@ export function InvoiceDetailPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight tabular">{invoice.number}</h1>
-            <Badge variant={STATUS_VARIANT[invoice.status]}>{invoice.status.replace('_', ' ')}</Badge>
+            <Badge variant={style.variant}>{style.label}</Badge>
+            {invoice.overdueDays > 0 && <Badge variant="destructive">{invoice.overdueDays} days overdue</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {invoice.customerName} - {invoice.branchName} - {formatDateTime(invoice.invoiceDate)}
           </p>
+          {invoice.dueDate && invoice.outstandingPaise > 0 && (
+            <p className="mt-0.5 text-sm text-muted-foreground">Payment due {formatDate(invoice.dueDate)}</p>
+          )}
+          {invoice.salesOrderNumber && (
+            <p className="mt-0.5 text-sm text-muted-foreground">Billed from order {invoice.salesOrderNumber}</p>
+          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" aria-hidden />
+            Print
+          </Button>
           {canRecordPayment && canPay && (
             <Button onClick={() => setPayOpen(true)}>
               <IndianRupee className="h-4 w-4" aria-hidden />
@@ -92,11 +109,23 @@ export function InvoiceDetailPage() {
         </div>
       </div>
 
+      {actionError && (
+        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive print:hidden">{actionError}</p>
+      )}
+
       {invoice.status === 'CANCELLED' && (
         <Card className="mb-6 border-destructive/40 bg-destructive/5">
           <CardContent className="p-4 text-sm">
             This invoice was cancelled{invoice.cancelledAt ? ` on ${formatDateTime(invoice.cancelledAt)}` : ''}.
-            {invoice.cancelReason && <> Reason: {invoice.cancelReason}</>} The stock it moved has been returned.
+            {invoice.cancelReason && <> Reason: {invoice.cancelReason}.</>} The stock it moved has been returned.
+          </CardContent>
+        </Card>
+      )}
+
+      {invoice.refundDuePaise > 0 && (
+        <Card className="mb-6 border-warning/50 bg-warning/10">
+          <CardContent className="p-4 text-sm">
+            {invoice.customerName} has paid {formatMoney(invoice.refundDuePaise)} more than the reduced bill and is owed that back.
           </CardContent>
         </Card>
       )}
@@ -104,11 +133,14 @@ export function InvoiceDetailPage() {
       <Card className="mb-6">
         <CardContent className="p-0">
           <table className="w-full text-sm">
-            <thead className="bg-muted/60">
+            <thead className="bg-muted/60 print:bg-transparent">
               <tr>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product</th>
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Qty</th>
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rate</th>
+                {hasDiscount && (
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Discount</th>
+                )}
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tax</th>
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Line total</th>
               </tr>
@@ -119,11 +151,21 @@ export function InvoiceDetailPage() {
                   <td className="px-4 py-2.5">
                     <span className="block font-medium">{item.productName}</span>
                     <span className="text-xs text-muted-foreground tabular">{item.sku}</span>
+                    {(item.returnedQty ?? 0) > 0 && (
+                      <span className="block text-xs text-warning-foreground">
+                        {formatNumber(item.returnedQty ?? 0)} {item.unitSymbol} returned
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular">
                     {formatNumber(item.quantity)} {item.unitSymbol}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular">{formatMoney(item.unitPricePaise)}</td>
+                  {hasDiscount && (
+                    <td className="px-4 py-2.5 text-right tabular text-muted-foreground">
+                      {(item.discountPercent ?? 0) > 0 ? `${item.discountPercent}%` : '-'}
+                    </td>
+                  )}
                   <td className="px-4 py-2.5 text-right tabular text-muted-foreground">{item.taxRatePercent}%</td>
                   <td className="px-4 py-2.5 text-right font-medium tabular">{formatMoney(item.lineTotalPaise)}</td>
                 </tr>
@@ -132,7 +174,13 @@ export function InvoiceDetailPage() {
           </table>
 
           <div className="flex justify-end border-t border-border p-4">
-            <div className="w-64 space-y-1.5 text-sm">
+            <div className="w-72 space-y-1.5 text-sm">
+              {(invoice.discountPaise ?? 0) > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Discount given</span>
+                  <span className="tabular">{formatMoney(invoice.discountPaise ?? 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="tabular">{formatMoney(invoice.subtotalPaise)}</span>
@@ -145,13 +193,25 @@ export function InvoiceDetailPage() {
                 <span>Total</span>
                 <span className="tabular">{formatMoney(invoice.totalPaise)}</span>
               </div>
+              {(invoice.returnedPaise ?? 0) > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Goods returned</span>
+                  <span className="tabular">- {formatMoney(invoice.returnedPaise ?? 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-muted-foreground">
                 <span>Paid</span>
                 <span className="tabular">{formatMoney(invoice.paidPaise)}</span>
               </div>
+              {(invoice.refundedPaise ?? 0) > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Refunded</span>
+                  <span className="tabular">- {formatMoney(invoice.refundedPaise ?? 0)}</span>
+                </div>
+              )}
               {invoice.outstandingPaise > 0 && (
                 <div className="flex justify-between font-semibold text-destructive">
-                  <span>Outstanding</span>
+                  <span>Amount due</span>
                   <span className="tabular">{formatMoney(invoice.outstandingPaise)}</span>
                 </div>
               )}
@@ -160,7 +220,74 @@ export function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">Created by {invoice.createdByName}</p>
+      {invoice.payments.length > 0 && (
+        <Card className="mb-6 print:hidden">
+          <CardContent className="p-4">
+            <h2 className="mb-3 text-sm font-semibold">Payments</h2>
+            <ul className="divide-y divide-border">
+              {invoice.payments.map((payment) => {
+                const paymentStyle = statusOf(PAYMENT_STATUS, payment.status);
+                return (
+                  <li key={payment._id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                    <div>
+                      <span className="font-medium tabular">{payment.number}</span>
+                      <span className="ml-2 text-muted-foreground">
+                        {formatDate(payment.paymentDate)} - {PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}
+                        {payment.reference ? ` - ${payment.reference}` : ''}
+                      </span>
+                      {payment.status === 'VOIDED' && payment.voidReason && (
+                        <span className="block text-xs text-muted-foreground">Voided: {payment.voidReason}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant={paymentStyle.variant}>{paymentStyle.label}</Badge>
+                      <span className={payment.status === 'VOIDED' ? 'tabular line-through text-muted-foreground' : 'tabular font-medium'}>
+                        {formatMoney(payment.amountPaise)}
+                      </span>
+                      {canVoid && payment.status === 'RECORDED' && (
+                        <Button variant="ghost" size="sm" onClick={() => setVoiding(payment._id)}>
+                          Void
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {invoice.returns.length > 0 && (
+        <Card className="mb-6 print:hidden">
+          <CardContent className="p-4">
+            <h2 className="mb-3 text-sm font-semibold">Goods returned</h2>
+            <ul className="divide-y divide-border">
+              {invoice.returns.map((salesReturn) => (
+                <li key={salesReturn._id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                  <div>
+                    <span className="font-medium tabular">{salesReturn.number}</span>
+                    <span className="ml-2 text-muted-foreground">
+                      {formatDate(salesReturn.returnDate)} - {RETURN_REASON_LABELS[salesReturn.reason] ?? salesReturn.reason}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="tabular font-medium">{formatMoney(salesReturn.creditPaise)} credited</span>
+                    {salesReturn.refundedPaise > 0 && (
+                      <span className="block text-xs text-muted-foreground">{formatMoney(salesReturn.refundedPaise)} refunded</span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {invoice.notes && <p className="mb-4 text-sm text-muted-foreground">Notes: {invoice.notes}</p>}
+      <p className="text-xs text-muted-foreground print:hidden">Created by {invoice.createdByName}</p>
+
+      <PrintFooter />
 
       <RecordPaymentDialog
         open={payOpen}
@@ -172,19 +299,46 @@ export function InvoiceDetailPage() {
         outstandingPaise={invoice.outstandingPaise}
       />
 
-      <ConfirmDialog
+      <ReasonDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
         title="Cancel this invoice?"
         message="The stock it sold will be returned to the branch. This cannot be undone."
         confirmLabel="Cancel invoice"
-        destructive
         busy={cancelInvoice.isPending}
-        onConfirm={() => {
-          // useCancelInvoice invalidates the ['invoices'] query prefix, which
-          // covers this page's ['invoices','detail',id] query too - no manual
-          // refetch or navigation needed, the detail below updates itself.
-          cancelInvoice.mutate({ id: invoice._id }, { onSuccess: () => setCancelOpen(false) });
+        error={actionError}
+        onConfirm={(reason) => {
+          setActionError(null);
+          cancelInvoice.mutate(
+            { id: invoice._id, ...(reason ? { reason } : {}) },
+            {
+              onSuccess: () => setCancelOpen(false),
+              onError: (cause) =>
+                setActionError(cause instanceof ApiRequestError ? cause.message : 'Could not cancel the invoice'),
+            },
+          );
+        }}
+      />
+
+      <ReasonDialog
+        open={voiding !== null}
+        onOpenChange={(open) => !open && setVoiding(null)}
+        title="Void this payment?"
+        message="The amount comes off this invoice and it becomes payable again. The payment stays on record, marked void."
+        confirmLabel="Void payment"
+        busy={voidPayment.isPending}
+        error={actionError}
+        onConfirm={(reason) => {
+          if (!voiding) return;
+          setActionError(null);
+          voidPayment.mutate(
+            { id: voiding, ...(reason ? { reason } : {}) },
+            {
+              onSuccess: () => setVoiding(null),
+              onError: (cause) =>
+                setActionError(cause instanceof ApiRequestError ? cause.message : 'Could not void the payment'),
+            },
+          );
         }}
       />
     </div>

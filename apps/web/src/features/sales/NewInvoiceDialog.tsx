@@ -1,24 +1,21 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { api } from '@/lib/apiClient';
+import { PAYMENT_METHODS, PERMISSIONS } from '@shopos/shared';
 import { ApiRequestError } from '@/lib/apiClient';
-import { formatMoney } from '@/lib/format';
-import { useBranches } from '@/hooks/useBranches';
-import { useAuthStore } from '@/stores/authStore';
+import { formatMoney, paiseToInput, parseRupeeInput } from '@/lib/format';
+import { PAYMENT_METHOD_LABELS } from '@/lib/statusStyles';
+import { useHasPermission } from '@/stores/authStore';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Field, Select } from '@/components/ui/field';
-import { useCustomers } from '../customers/customersApi';
-import { InvoiceLinePicker, type DraftLine } from './InvoiceLinePicker';
+import { Field, Input, Select } from '@/components/ui/field';
+import { DocumentFields, TotalsPanel, linesToInput, useDocumentForm } from './DocumentForm';
 import { useCreateInvoice } from './invoicesApi';
 
-interface PriceListOption {
-  _id: string;
-  name: string;
-  isDefault: boolean;
-}
-
+/**
+ * A new invoice, with the counter case first-class: money can be taken in the same
+ * step, so a sale paid at the till is one action rather than a bill followed by a
+ * separate payment that someone might forget to record.
+ */
 export function NewInvoiceDialog({
   open,
   onOpenChange,
@@ -27,47 +24,61 @@ export function NewInvoiceDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
-  const activeBranchId = useAuthStore((state) => state.activeBranchId);
-  const { data: branches } = useBranches();
-  const { data: customers } = useCustomers();
-  const { data: priceLists } = useQuery({
-    queryKey: ['price-lists'],
-    queryFn: () => api.get<PriceListOption[]>('/pricing/lists'),
-    staleTime: 5 * 60_000,
-  });
-
-  const [branchId, setBranchId] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [priceListId, setPriceListId] = useState('');
-  const [lines, setLines] = useState<DraftLine[]>([]);
-  const [subtotalPaise, setSubtotalPaise] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
+  const canTakePayment = useHasPermission(PERMISSIONS.PAYMENTS_CREATE);
+  const form = useDocumentForm(open);
   const createInvoice = useCreateInvoice();
+
+  const [creditDays, setCreditDays] = useState('0');
+  const [notes, setNotes] = useState('');
+  const [takePayment, setTakePayment] = useState(false);
+  const [method, setMethod] = useState('CASH');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setBranchId(activeBranchId ?? branches?.[0]?._id ?? '');
-    setCustomerId('');
-    setPriceListId(priceLists?.find((list) => list.isDefault)?._id ?? priceLists?.[0]?._id ?? '');
-    setLines([]);
-    setSubtotalPaise(0);
+    setNotes('');
+    setTakePayment(false);
+    setMethod('CASH');
+    setReference('');
     setError(null);
-  }, [open, activeBranchId, branches, priceLists]);
+  }, [open]);
 
-  const ready = branchId && priceListId && lines.length > 0 && lines.every((line) => Number(line.quantity) > 0);
+  // A customer on thirty days' credit gets a due date thirty days out without anyone
+  // having to remember it.
+  useEffect(() => {
+    setCreditDays(String(form.customer?.creditDays ?? 0));
+  }, [form.customer]);
+
+  // Offer to take the whole bill, and keep that offer in step as lines change.
+  useEffect(() => {
+    if (takePayment) setAmount(paiseToInput(form.totals.totalPaise));
+  }, [takePayment, form.totals.totalPaise]);
+
+  const paymentPaise = parseRupeeInput(amount);
+  const paymentValid =
+    !takePayment || (paymentPaise > 0 && paymentPaise <= form.totals.totalPaise);
+  const canSubmit = form.ready && paymentValid && !createInvoice.isPending;
 
   function submit() {
     setError(null);
     createInvoice.mutate(
       {
-        branchId,
-        ...(customerId ? { customerId } : {}),
-        items: lines.map((line) => ({
-          productId: line.product._id,
-          quantity: Number(line.quantity),
-          priceListId,
-        })),
+        branchId: form.branchId,
+        ...(form.customerId ? { customerId: form.customerId } : {}),
+        creditDays: Math.max(0, Math.round(Number(creditDays) || 0)),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+        items: linesToInput(form),
+        ...(takePayment && canTakePayment
+          ? {
+              payment: {
+                method,
+                amountPaise: paymentPaise,
+                ...(reference.trim() ? { reference: reference.trim() } : {}),
+              },
+            }
+          : {}),
       },
       {
         onSuccess: (invoice) => {
@@ -92,58 +103,74 @@ export function NewInvoiceDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createInvoice.isPending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!ready || createInvoice.isPending}>
-            {createInvoice.isPending ? 'Creating...' : 'Create invoice'}
+          <Button onClick={submit} disabled={!canSubmit}>
+            {createInvoice.isPending ? 'Creating...' : takePayment ? 'Create and take payment' : 'Create invoice'}
           </Button>
         </>
       }
     >
-      <div className="grid gap-x-4 sm:grid-cols-3">
-        <Field label="Branch" required>
-          <Select value={branchId} onChange={(event) => setBranchId(event.target.value)}>
-            <option value="">Select</option>
-            {branches?.map((branch) => (
-              <option key={branch._id} value={branch._id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Customer" hint="Leave blank for a walk-in sale">
-          <Select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
-            <option value="">Walk-in customer</option>
-            {customers?.map((customer) => (
-              <option key={customer._id} value={customer._id}>
-                {customer.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Rate type" required>
-          <Select value={priceListId} onChange={(event) => setPriceListId(event.target.value)}>
-            <option value="">Select</option>
-            {priceLists?.map((list) => (
-              <option key={list._id} value={list._id}>
-                {list.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-
-      <InvoiceLinePicker
-        lines={lines}
-        onChange={setLines}
-        priceListId={priceListId}
-        onTotalsChange={setSubtotalPaise}
+      <DocumentFields
+        form={form}
+        extra={
+          <div className="grid gap-x-4 sm:grid-cols-3">
+            <Field label="Credit days" hint={form.customerId ? 'From the customer, change if needed' : 'Walk-in sales are due today'}>
+              <Input
+                type="number"
+                min={0}
+                max={365}
+                value={creditDays}
+                onChange={(event) => setCreditDays(event.target.value)}
+                disabled={!form.customerId}
+              />
+            </Field>
+            <Field label="Notes" className="sm:col-span-2">
+              <Input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
+            </Field>
+          </div>
+        }
       />
 
-      {lines.length > 0 && (
-        <div className="mt-4 flex justify-end">
-          <div className="w-56 rounded-md bg-muted/60 px-4 py-2.5 text-right">
-            <p className="text-xs text-muted-foreground">Subtotal (before tax)</p>
-            <p className="text-lg font-semibold tabular">{formatMoney(subtotalPaise)}</p>
-          </div>
+      <TotalsPanel totals={form.totals} />
+
+      {canTakePayment && form.totals.totalPaise > 0 && (
+        <div className="mt-4 rounded-md border border-border p-4">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-input"
+              checked={takePayment}
+              onChange={(event) => setTakePayment(event.target.checked)}
+            />
+            Take payment now
+          </label>
+
+          {takePayment && (
+            <div className="mt-3 grid gap-x-4 sm:grid-cols-3">
+              <Field
+                label="Amount"
+                error={!paymentValid ? `Between zero and ${formatMoney(form.totals.totalPaise)}` : undefined}
+              >
+                <Input
+                  className="tabular"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                />
+              </Field>
+              <Field label="Method">
+                <Select value={method} onChange={(event) => setMethod(event.target.value)}>
+                  {Object.values(PAYMENT_METHODS).map((value) => (
+                    <option key={value} value={value}>
+                      {PAYMENT_METHOD_LABELS[value] ?? value}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Reference" hint="UPI id or cheque no.">
+                <Input value={reference} onChange={(event) => setReference(event.target.value)} />
+              </Field>
+            </div>
+          )}
         </div>
       )}
 

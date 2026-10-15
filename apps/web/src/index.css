@@ -142,3 +142,28 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+ * Printing. An invoice is a document people hand across a counter, so the page
+ * chrome - sidebar, header, buttons - must vanish and leave only the bill. Anything
+ * meant for paper alone carries .print-only; anything meant for the screen alone
+ * carries Tailwind's print:hidden.
+ */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}

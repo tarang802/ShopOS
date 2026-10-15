@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
+  Banknote,
   Boxes,
   Building2,
   ChevronDown,
@@ -78,6 +79,7 @@ const OPERATIONS: NavItem[] = [
   },
   { to: '/customers', label: LABELS.customers, icon: Users, permission: PERMISSIONS.CUSTOMERS_VIEW },
   { to: '/sales', label: LABELS.sales, icon: Receipt, permission: PERMISSIONS.SALES_VIEW },
+  { to: '/payments', label: LABELS.payments, icon: Banknote, permission: PERMISSIONS.PAYMENTS_VIEW },
   { to: '/suppliers', label: LABELS.suppliers, icon: Truck, permission: PERMISSIONS.SUPPLIERS_VIEW },
   { to: '/purchases', label: LABELS.purchases, icon: ShoppingCart, permission: PERMISSIONS.PURCHASES_VIEW },
 ];
@@ -209,7 +211,7 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block print:hidden">
         {sidebar}
       </aside>
 
@@ -230,7 +232,7 @@ export function AppShell() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur print:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -313,7 +315,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
           <Outlet />
         </main>
       </div>
