@@ -8,9 +8,9 @@ import {
   type PaginationQuery,
   type PaymentMethod,
 } from '@shopos/shared';
-import { Customer, Invoice, Payment } from '../../db/models';
+import { Branch, Customer, Invoice, Payment } from '../../db/models';
 import { AppError } from '../../core/AppError';
-import { orgFilter, type TenantContext } from '../../core/tenantContext';
+import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { withTransaction } from '../../db/transaction';
 import { nextDocumentNumber } from '../../services/counterService';
 import { recordAudit } from '../../services/auditService';
@@ -40,6 +40,14 @@ export interface RecordPaymentInput {
 }
 
 export async function recordPayment(ctx: TenantContext, input: RecordPaymentInput) {
+  // The branch arrives from the client. It must exist in this business and be
+  // one this person may act in - otherwise a payment could be booked against
+  // another tenant's branch or a branch the caller has no access to.
+  const branchId = new Types.ObjectId(input.branchId);
+  assertBranchAccess(ctx, branchId);
+  const branch = await Branch.findOne({ ...orgFilter(ctx), _id: branchId }).select('_id').lean();
+  if (!branch) throw AppError.notFound('Branch');
+
   const allocatedTotal = sumPaise(input.allocations.map((a) => a.amountPaise));
   if (allocatedTotal > input.amountPaise) {
     throw new AppError(
@@ -72,6 +80,17 @@ export async function recordPayment(ctx: TenantContext, input: RecordPaymentInpu
 
   for (const allocation of input.allocations) {
     const invoice = invoiceById.get(allocation.invoiceId)!;
+    assertBranchAccess(ctx, invoice.branchId);
+
+    // A payment belongs to one party. Settling Bansal's bill with money recorded
+    // under Sharma's name would corrupt both ledgers.
+    const invoiceCustomer = invoice.customerId?.toString();
+    if ((customerId?.toString() ?? undefined) !== invoiceCustomer) {
+      throw AppError.businessRule(
+        `Invoice ${invoice.number} belongs to ${invoice.customerName}, not to the customer on this payment`,
+      );
+    }
+
     if (invoice.status === INVOICE_STATUSES.CANCELLED) {
       throw AppError.businessRule(`Invoice ${invoice.number} is cancelled and cannot receive a payment`);
     }
@@ -98,7 +117,7 @@ export async function recordPayment(ctx: TenantContext, input: RecordPaymentInpu
       [
         {
           ...orgFilter(ctx),
-          branchId: new Types.ObjectId(input.branchId),
+          branchId,
           ...(customerId ? { customerId } : {}),
           customerName,
           number,
@@ -140,6 +159,7 @@ export async function listPayments(
   filters: { customerId?: string },
 ) {
   const filter: Record<string, unknown> = { ...orgFilter(ctx) };
+  if (!ctx.allBranches) filter.branchId = { $in: ctx.branchIds };
   if (filters.customerId) filter.customerId = new Types.ObjectId(filters.customerId);
 
   const [items, total] = await Promise.all([
@@ -155,6 +175,7 @@ export async function listOutstandingInvoices(ctx: TenantContext, customerId?: s
     ...orgFilter(ctx),
     status: { $in: [INVOICE_STATUSES.ISSUED, INVOICE_STATUSES.PARTIALLY_PAID] },
   };
+  if (!ctx.allBranches) filter.branchId = { $in: ctx.branchIds };
   if (customerId) filter.customerId = new Types.ObjectId(customerId);
 
   const invoices = await Invoice.find(filter).sort({ invoiceDate: 1 }).select('-items').lean();
