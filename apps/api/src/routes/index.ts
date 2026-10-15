@@ -13,6 +13,7 @@ import { purchaseOrdersRouter, suppliersRouter } from '../modules/purchasing/pur
 import { pricingRouter } from '../modules/pricing/pricing.routes';
 import { productsRouter } from '../modules/products/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
+import { quotationsRouter } from '../modules/sales/quotations.routes';
 import { salesOrdersRouter } from '../modules/sales/salesOrders.routes';
 import { rolesRouter } from '../modules/roles/roles.routes';
 import { usersRouter } from '../modules/users/users.routes';
@@ -43,6 +44,7 @@ apiRouter.use('/inventory', inventoryRouter);
 
 apiRouter.use('/customers', customersRouter);
 apiRouter.use('/invoices', invoicesRouter);
+apiRouter.use('/quotations', quotationsRouter);
 apiRouter.use('/sales-orders', salesOrdersRouter);
 
 apiRouter.use('/suppliers', suppliersRouter);
@@ -53,5 +55,4 @@ apiRouter.use('/payments', paymentsRouter);
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/audit-logs', auditRouter);
 
-// Phase 10+ quotations
 // Phase 15+ reports

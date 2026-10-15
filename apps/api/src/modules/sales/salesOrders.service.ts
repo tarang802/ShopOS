@@ -45,7 +45,7 @@ export interface CreateSalesOrderInput extends SalesOrderHeaderInput {
   items: InvoiceLineInput[];
 }
 
-async function resolveParties(ctx: TenantContext, header: SalesOrderHeaderInput) {
+export async function resolveParties(ctx: TenantContext, header: SalesOrderHeaderInput) {
   const branchId = new Types.ObjectId(header.branchId);
   assertBranchAccess(ctx, branchId);
 

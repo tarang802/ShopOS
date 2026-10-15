@@ -406,44 +406,78 @@ export async function persistInvoice(
   return invoice;
 }
 
-export async function createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
-  const prepared = await prepareInvoice(ctx, input);
+export interface CounterPayment {
+  method: PaymentMethod;
+  amountPaise: number;
+  reference?: string;
+}
 
-  if (input.payment) {
-    if (!ctx.permissions.has(PERMISSIONS.PAYMENTS_CREATE)) {
-      throw AppError.permissionDenied(PERMISSIONS.PAYMENTS_CREATE);
-    }
-    if (input.payment.amountPaise <= 0 || input.payment.amountPaise > prepared.totalPaise) {
-      throw AppError.businessRule('The payment taken at the counter must be more than zero and no more than the bill');
-    }
+/** Taking money at the moment of sale needs the payments permission and a sensible amount. */
+export function assertCounterPaymentAllowed(
+  ctx: TenantContext,
+  payment: CounterPayment | undefined,
+  totalPaise: number,
+): void {
+  if (!payment) return;
+  if (!ctx.permissions.has(PERMISSIONS.PAYMENTS_CREATE)) {
+    throw AppError.permissionDenied(PERMISSIONS.PAYMENTS_CREATE);
+  }
+  if (payment.amountPaise <= 0 || payment.amountPaise > totalPaise) {
+    throw AppError.businessRule(
+      'The payment taken at the counter must be more than zero and no more than the bill',
+    );
+  }
+}
+
+/**
+ * Write an invoice and, if money changed hands, the payment for it - one
+ * transaction, so a counter sale cannot half-succeed: billed but not paid, or
+ * paid against a bill that was never written.
+ */
+export async function persistInvoiceAndPay(
+  ctx: TenantContext,
+  prepared: PreparedInvoice,
+  payment: CounterPayment | undefined,
+  session: ClientSession | undefined,
+  extras: { salesOrderId?: Types.ObjectId; salesOrderNumber?: string } = {},
+) {
+  const invoice = await persistInvoice(ctx, prepared, session, extras);
+
+  if (payment) {
+    await recordPaymentInSession(
+      ctx,
+      {
+        branchId: prepared.branchId.toString(),
+        ...(prepared.customerId
+          ? { customerId: prepared.customerId.toString() }
+          : { customerName: prepared.customerName }),
+        amountPaise: payment.amountPaise,
+        method: payment.method,
+        ...(payment.reference ? { reference: payment.reference } : {}),
+        allocations: [{ invoiceId: invoice._id.toString(), amountPaise: payment.amountPaise }],
+      },
+      session,
+    );
   }
 
-  const invoiceId = await withTransaction(async (session) => {
-    const invoice = await persistInvoice(ctx, prepared, session);
+  return invoice;
+}
 
-    if (input.payment) {
-      await recordPaymentInSession(
-        ctx,
-        {
-          branchId: input.branchId,
-          ...(prepared.customerId
-            ? { customerId: prepared.customerId.toString() }
-            : { customerName: prepared.customerName }),
-          amountPaise: input.payment.amountPaise,
-          method: input.payment.method,
-          ...(input.payment.reference ? { reference: input.payment.reference } : {}),
-          allocations: [{ invoiceId: invoice._id.toString(), amountPaise: input.payment.amountPaise }],
-        },
-        session,
-      );
-    }
-
-    return invoice._id;
-  });
-
-  // Re-read so the response reflects the payment, if there was one.
+/** Re-read an invoice after its transaction so the response reflects any payment. */
+export async function loadPresentedInvoice(ctx: TenantContext, invoiceId: Types.ObjectId) {
   const saved = await Invoice.findOne({ ...orgFilter(ctx), _id: invoiceId }).lean();
   return presentInvoice(ctx, saved!);
+}
+
+export async function createInvoice(ctx: TenantContext, input: CreateInvoiceInput) {
+  const prepared = await prepareInvoice(ctx, input);
+  assertCounterPaymentAllowed(ctx, input.payment, prepared.totalPaise);
+
+  const invoice = await withTransaction((session) =>
+    persistInvoiceAndPay(ctx, prepared, input.payment, session),
+  );
+
+  return loadPresentedInvoice(ctx, invoice._id);
 }
 
 export interface InvoiceListFilters {
