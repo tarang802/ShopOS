@@ -88,7 +88,14 @@ export function InvoiceDetailPage() {
             {invoice.overdueDays > 0 && <Badge variant="destructive">{invoice.overdueDays} days overdue</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {invoice.customerName} - {invoice.branchName} - {formatDateTime(invoice.invoiceDate)}
+            {invoice.customerId ? (
+              <Link to={`/customers/${invoice.customerId}`} className="hover:text-primary hover:underline">
+                {invoice.customerName}
+              </Link>
+            ) : (
+              invoice.customerName
+            )}{' '}
+            - {invoice.branchName} - {formatDateTime(invoice.invoiceDate)}
           </p>
           {invoice.dueDate && invoice.outstandingPaise > 0 && (
             <p className="mt-0.5 text-sm text-muted-foreground">Payment due {formatDate(invoice.dueDate)}</p>

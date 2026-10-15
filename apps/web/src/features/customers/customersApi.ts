@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, toQuery, type PaginatedResult } from '@/lib/apiClient';
+import type { Statement } from '../purchasing/purchasingApi';
 
 export interface Customer {
   _id: string;
@@ -57,5 +58,46 @@ export function useUpdateCustomer() {
     mutationFn: ({ id, ...input }: Partial<CustomerInput> & { id: string }) =>
       api.patch<Customer>(`/customers/${id}`, input),
     onSuccess: () => client.invalidateQueries({ queryKey: ['customers'] }),
+  });
+}
+
+export interface CustomerSummary {
+  customer: Customer;
+  outstandingPaise: number;
+  refundDuePaise: number;
+  netBalancePaise: number;
+  overduePaise: number;
+  openInvoices: number;
+  overdueInvoices: number;
+  lifetimeSalesPaise: number;
+  invoiceCount: number;
+  lastInvoiceDate: string | null;
+  creditLimitPaise: number;
+  creditAvailablePaise: number | null;
+}
+
+export function useCustomerSummary(id: string | undefined) {
+  return useQuery({
+    queryKey: ['customers', 'summary', id],
+    queryFn: () => api.get<CustomerSummary>(`/customers/${id}/summary`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCustomerStatement(id: string | undefined, range: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: ['customers', 'statement', id, range],
+    queryFn: () =>
+      api.get<Statement & { customer: { name: string } }>(`/customers/${id}/statement${toQuery(range)}`),
+    enabled: Boolean(id),
+  });
+}
+
+/** Customers with what each one owes, for the list. */
+export function useCustomersWithBalance(search?: string) {
+  return useQuery({
+    queryKey: ['customers', 'with-balance', search],
+    queryFn: () => api.list<Customer>(`/customers${toQuery({ search, limit: 100, withBalance: 'true' })}`),
+    select: (result: PaginatedResult<Customer>) => result.items,
   });
 }

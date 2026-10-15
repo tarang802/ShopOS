@@ -20,6 +20,8 @@ import { SettingsPage } from '@/features/admin/SettingsPage';
 import { ActivityPage } from '@/features/admin/ActivityPage';
 import { SystemStatusPage } from '@/pages/SystemStatusPage';
 import { CustomersPage } from '@/features/customers/CustomersPage';
+import { CustomerDetailPage } from '@/features/customers/CustomerDetailPage';
+import { SupplierDetailPage } from '@/features/purchasing/SupplierDetailPage';
 import { InvoicesPage } from '@/features/sales/InvoicesPage';
 import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
 import { PaymentsPage } from '@/features/payments/PaymentsPage';
@@ -182,6 +184,14 @@ export function App() {
           }
         />
         <Route
+          path="customers/:id"
+          element={
+            <RequirePermission permission="customers:view">
+              <CustomerDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="sales"
           element={
             <RequirePermission permission="sales:view">
@@ -242,6 +252,14 @@ export function App() {
           element={
             <RequirePermission permission="suppliers:view">
               <SuppliersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="suppliers/:id"
+          element={
+            <RequirePermission permission="suppliers:view">
+              <SupplierDetailPage />
             </RequirePermission>
           }
         />
