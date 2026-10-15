@@ -3,27 +3,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PAYMENT_METHODS } from '@shopos/shared';
 import { api, ApiRequestError } from '@/lib/apiClient';
 import { formatMoney, paiseToInput, parseRupeeInput } from '@/lib/format';
+import { PAYMENT_METHOD_LABELS } from '@/lib/statusStyles';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select } from '@/components/ui/field';
+import { invalidateSalesQueries } from '../sales/invoicesApi';
 
 /**
  * Record a payment against one invoice.
  *
  * Deliberately scoped to a single invoice rather than a free-standing "record
  * a payment, then pick invoices" screen - in a shop, a payment nearly always
- * happens because someone is looking at one specific bill. Multi-invoice
- * settlement can be added later without changing this component.
+ * happens because someone is looking at one specific bill. A payment must be fully
+ * applied, so the amount is exactly what is allocated to this invoice.
  */
-
-const METHOD_LABELS: Record<string, string> = {
-  CASH: 'Cash',
-  UPI: 'UPI',
-  BANK_TRANSFER: 'Bank transfer',
-  CARD: 'Card',
-  CHEQUE: 'Cheque',
-  CREDIT: 'On credit (pay later)',
-};
 
 export function RecordPaymentDialog({
   open,
@@ -45,12 +38,14 @@ export function RecordPaymentDialog({
   const client = useQueryClient();
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('CASH');
+  const [reference, setReference] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setAmount(paiseToInput(outstandingPaise));
       setMethod('CASH');
+      setReference('');
       setError(null);
     }
   }, [open, outstandingPaise]);
@@ -62,10 +57,11 @@ export function RecordPaymentDialog({
         ...(customerId ? { customerId } : {}),
         amountPaise,
         method,
+        ...(reference.trim() ? { reference: reference.trim() } : {}),
         allocations: [{ invoiceId, amountPaise }],
       }),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateSalesQueries(client);
       onOpenChange(false);
     },
     onError: (cause) =>
@@ -113,16 +109,17 @@ export function RecordPaymentDialog({
           <Select value={method} onChange={(event) => setMethod(event.target.value)}>
             {Object.values(PAYMENT_METHODS).map((value) => (
               <option key={value} value={value}>
-                {METHOD_LABELS[value] ?? value}
+                {PAYMENT_METHOD_LABELS[value] ?? value}
               </option>
             ))}
           </Select>
         </Field>
+        <Field label="Reference" hint="UPI transaction id or cheque number" className="sm:col-span-2">
+          <Input value={reference} onChange={(event) => setReference(event.target.value)} maxLength={60} />
+        </Field>
       </div>
 
-      {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-      )}
+      {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
     </Dialog>
   );
 }

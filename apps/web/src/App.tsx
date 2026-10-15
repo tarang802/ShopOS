@@ -22,6 +22,7 @@ import { SystemStatusPage } from '@/pages/SystemStatusPage';
 import { CustomersPage } from '@/features/customers/CustomersPage';
 import { InvoicesPage } from '@/features/sales/InvoicesPage';
 import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
+import { PaymentsPage } from '@/features/payments/PaymentsPage';
 import { SuppliersPage } from '@/features/purchasing/SuppliersPage';
 import { PurchaseOrdersPage } from '@/features/purchasing/PurchaseOrdersPage';
 import { PurchaseOrderDetailPage } from '@/features/purchasing/PurchaseOrderDetailPage';
@@ -189,6 +190,14 @@ export function App() {
           element={
             <RequirePermission permission="sales:view">
               <InvoiceDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="payments"
+          element={
+            <RequirePermission permission="payments:view">
+              <PaymentsPage />
             </RequirePermission>
           }
         />
