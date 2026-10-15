@@ -26,6 +26,18 @@ export const OUTSTANDING_EXPRESSION = {
   ],
 } as const;
 
+/**
+ * A filter value that matches an amount which may be missing altogether.
+ *
+ * Invoices written before returns existed have no returnedPaise or refundedPaise,
+ * and `{ returnedPaise: 0 }` does not match a missing field - so a compare-and-swap
+ * on such an invoice would never match and the payment would be refused forever.
+ */
+export function amountMatches(value: number | undefined): number | { $in: (number | null)[] } {
+  const amount = value ?? 0;
+  return amount === 0 ? { $in: [0, null] } : amount;
+}
+
 /** Invoices that can still have money collected against them. */
 export const OPEN_INVOICE_STATUSES = [
   INVOICE_STATUSES.ISSUED,

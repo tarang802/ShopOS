@@ -17,7 +17,7 @@ import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/te
 import { sessionOption, withTransaction } from '../../db/transaction';
 import { nextDocumentNumber } from '../../services/counterService';
 import { recordAudit } from '../../services/auditService';
-import { OPEN_INVOICE_STATUSES } from '../../services/receivablesService';
+import { OPEN_INVOICE_STATUSES, amountMatches } from '../../services/receivablesService';
 import { presentInvoice } from '../sales/invoicePresenter';
 
 /**
@@ -49,12 +49,6 @@ export interface RecordPaymentInput {
   reference?: string;
   notes?: string;
   allocations: PaymentAllocationInput[];
-}
-
-/** A field that may be missing on invoices written before returns existed. */
-function amountMatches(value: number | undefined): number | { $in: (number | null)[] } {
-  const amount = value ?? 0;
-  return amount === 0 ? { $in: [0, null] } : amount;
 }
 
 /**

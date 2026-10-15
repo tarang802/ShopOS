@@ -17,6 +17,7 @@ export * from './Payment';
 export * from './PurchaseOrder';
 export * from './Quotation';
 export * from './SalesOrder';
+export * from './SalesReturn';
 export * from './Supplier';
 export * from './InventoryBalance';
 export * from './InventoryTransaction';

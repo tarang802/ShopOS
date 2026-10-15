@@ -105,6 +105,17 @@ export const INVOICE_STATUSES = {
 
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[keyof typeof INVOICE_STATUSES];
 
+/** Why goods came back. Recorded on every return so a pattern of one cause is visible. */
+export const RETURN_REASONS = {
+  DEFECTIVE: 'DEFECTIVE',
+  WRONG_ITEM: 'WRONG_ITEM',
+  EXCESS_QUANTITY: 'EXCESS_QUANTITY',
+  CUSTOMER_CHANGED_MIND: 'CUSTOMER_CHANGED_MIND',
+  OTHER: 'OTHER',
+} as const;
+
+export type ReturnReason = (typeof RETURN_REASONS)[keyof typeof RETURN_REASONS];
+
 /** A payment is never deleted. Reversing one marks it VOIDED and re-opens the bills it settled. */
 export const PAYMENT_STATUSES = {
   RECORDED: 'RECORDED',

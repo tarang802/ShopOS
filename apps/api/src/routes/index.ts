@@ -15,6 +15,7 @@ import { productsRouter } from '../modules/products/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
 import { quotationsRouter } from '../modules/sales/quotations.routes';
 import { salesOrdersRouter } from '../modules/sales/salesOrders.routes';
+import { salesReturnsRouter } from '../modules/sales/salesReturns.routes';
 import { rolesRouter } from '../modules/roles/roles.routes';
 import { usersRouter } from '../modules/users/users.routes';
 
@@ -46,6 +47,7 @@ apiRouter.use('/customers', customersRouter);
 apiRouter.use('/invoices', invoicesRouter);
 apiRouter.use('/quotations', quotationsRouter);
 apiRouter.use('/sales-orders', salesOrdersRouter);
+apiRouter.use('/sales-returns', salesReturnsRouter);
 
 apiRouter.use('/suppliers', suppliersRouter);
 apiRouter.use('/purchase-orders', purchaseOrdersRouter);

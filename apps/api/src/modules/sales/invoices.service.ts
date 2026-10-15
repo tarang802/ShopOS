@@ -12,7 +12,16 @@ import {
   type PaginationQuery,
   type PaymentMethod,
 } from '@shopos/shared';
-import { Branch, Customer, Invoice, Organization, Product, type IInvoice } from '../../db/models';
+import {
+  Branch,
+  Customer,
+  Invoice,
+  Organization,
+  Payment,
+  Product,
+  SalesReturn,
+  type IInvoice,
+} from '../../db/models';
 import { AppError } from '../../core/AppError';
 import { safeSearchRegex } from '../../core/listQuery';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
@@ -564,7 +573,37 @@ export async function getInvoice(ctx: TenantContext, invoiceId: Types.ObjectId) 
   const invoice = await Invoice.findOne({ ...orgFilter(ctx), _id: invoiceId }).lean();
   if (!invoice) throw AppError.notFound('Invoice');
   assertBranchAccess(ctx, invoice.branchId);
-  return presentInvoice(ctx, invoice);
+
+  const [payments, returns] = await Promise.all([
+    Payment.find({ ...orgFilter(ctx), 'allocations.invoiceId': invoiceId })
+      .sort({ paymentDate: 1, _id: 1 })
+      .select('number paymentDate method reference status voidedAt voidReason allocations')
+      .lean(),
+    SalesReturn.find({ ...orgFilter(ctx), invoiceId })
+      .sort({ returnDate: 1, _id: 1 })
+      .select('number returnDate reason creditPaise refundedPaise')
+      .lean(),
+  ]);
+
+  return {
+    ...presentInvoice(ctx, invoice),
+    // A payment can settle several invoices, so show only the share that went to
+    // this one.
+    payments: payments.map((payment) => ({
+      _id: payment._id,
+      number: payment.number,
+      paymentDate: payment.paymentDate,
+      method: payment.method,
+      reference: payment.reference,
+      status: payment.status,
+      voidedAt: payment.voidedAt,
+      voidReason: payment.voidReason,
+      amountPaise:
+        payment.allocations.find((allocation) => allocation.invoiceId.equals(invoiceId))
+          ?.amountPaise ?? 0,
+    })),
+    returns,
+  };
 }
 
 /**
@@ -588,6 +627,11 @@ export async function cancelInvoice(
 
   if (invoice.status === INVOICE_STATUSES.CANCELLED) {
     throw AppError.businessRule('This invoice is already cancelled');
+  }
+  if ((invoice.returnedPaise ?? 0) > 0) {
+    throw AppError.businessRule(
+      'Goods have been returned against this invoice, so it can no longer be cancelled',
+    );
   }
   if (invoice.paidPaise > 0) {
     throw new AppError(
