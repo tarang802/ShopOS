@@ -9,6 +9,7 @@ import { sendSuccess } from '../../core/http';
 import { orgFilter } from '../../core/tenantContext';
 import * as inventoryService from '../inventory/inventory.service';
 import * as pricingService from '../pricing/pricing.service';
+import { dashboardDepth } from './dashboard.service';
 
 /**
  * The opening screen.
@@ -34,8 +35,15 @@ dashboardRouter.get(
 
     const branchScope = ctx.allBranches ? {} : { _id: { $in: ctx.branchIds } };
 
-    const [productCount, branchCount, stock, recentMovements, recentPrices, recentActivity] =
-      await Promise.all([
+    const [
+      productCount,
+      branchCount,
+      stock,
+      recentMovements,
+      recentPrices,
+      recentActivity,
+      depth,
+    ] = await Promise.all([
         Product.countDocuments({ ...orgFilter(ctx), isActive: true }),
         Branch.countDocuments({ ...orgFilter(ctx), isActive: true, ...branchScope }),
         inventoryService.stockSummary(ctx, branchId),
@@ -52,9 +60,11 @@ dashboardRouter.get(
         ctx.permissions.has(PERMISSIONS.AUDIT_LOGS_VIEW)
           ? AuditLog.find(orgFilter(ctx)).sort({ createdAt: -1 }).limit(8).lean()
           : Promise.resolve([]),
+        dashboardDepth(ctx, branchId),
       ]);
 
     sendSuccess(res, {
+      ...depth,
       productCount,
       branchCount,
       stock,
