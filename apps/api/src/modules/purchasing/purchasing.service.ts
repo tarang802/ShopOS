@@ -13,6 +13,7 @@ import { AppError } from '../../core/AppError';
 import { assertBranchAccess, orgFilter, type TenantContext } from '../../core/tenantContext';
 import { sessionOption, withTransaction } from '../../db/transaction';
 import { applyMovement } from '../../services/inventoryService';
+import { applyReceiptCost } from '../../services/costingService';
 import { nextDocumentNumber } from '../../services/counterService';
 import { recordAudit } from '../../services/auditService';
 
@@ -247,6 +248,14 @@ export async function receiveGoods(
           `${line.productName} was just received by someone else. Refresh the order and try again`,
         );
       }
+
+      // Cost first, while the shelf still holds only what was there before this
+      // delivery - the average weights old stock against the new arrival.
+      await applyReceiptCost(
+        ctx,
+        { productId: line.productId, receivedQty, unitCostPaise: line.unitPricePaise },
+        session,
+      );
 
       await applyMovement(
         ctx,
