@@ -113,61 +113,56 @@ export interface PreparedInvoice {
 const DAY_MS = 86_400_000;
 
 /**
- * Everything that must be true before an invoice can be written, and the
- * invoice that would result. Performs no writes.
+ * A line whose commercial terms are settled: the rate, the discount and the tax.
+ * Everything else on a document line is arithmetic on these.
  */
-export async function prepareInvoice(
+export interface FrozenLine {
+  productId: Types.ObjectId;
+  productName: string;
+  sku: string;
+  unitSymbol: string;
+  quantity: number;
+  unitPricePaise: number;
+  discountPercent: number;
+  taxRatePercent: number;
+}
+
+/**
+ * Price document lines through the pricing engine and settle their terms.
+ *
+ * This is where a rate or a discount is authorised: typing a different rate, or
+ * discounting past the business's threshold, needs `sales:discount_override`.
+ * Quotations and sales orders freeze the result, and converting them later
+ * honours it - the authority was exercised when the price was committed, not
+ * when somebody else turns the quote into a bill.
+ */
+export async function priceDocumentLines(
   ctx: TenantContext,
-  input: CreateInvoiceInput,
-): Promise<PreparedInvoice> {
-  const branchId = new Types.ObjectId(input.branchId);
-  assertBranchAccess(ctx, branchId);
-
-  const [branch, organization] = await Promise.all([
-    Branch.findOne({ ...orgFilter(ctx), _id: branchId }).select('name').lean(),
-    Organization.findById(ctx.organizationId).select('settings timezone').lean(),
-  ]);
-  if (!branch) throw AppError.notFound('Branch');
-
-  let customerName = input.customerName?.trim();
-  let customerId: Types.ObjectId | undefined;
-  let customerCreditDays = 0;
-  let creditLimitPaise: number | undefined;
-  if (input.customerId) {
-    const customer = await Customer.findOne({ ...orgFilter(ctx), _id: input.customerId }).lean();
-    if (!customer) throw AppError.badRequest('Select a valid customer');
-    if (!customer.isActive) throw AppError.badRequest(`${customer.name} is marked inactive`);
-    customerId = customer._id;
-    customerName = customer.name;
-    customerCreditDays = customer.creditDays ?? 0;
-    creditLimitPaise = customer.creditLimitPaise;
-  }
-  if (!customerName) customerName = 'Walk-in Customer';
-
+  items: InvoiceLineInput[],
+): Promise<FrozenLine[]> {
+  const organization = await Organization.findById(ctx.organizationId).select('settings').lean();
   const allowOverride = ctx.permissions.has(PERMISSIONS.SALES_DISCOUNT_OVERRIDE);
   const maxDiscountPercent = organization?.settings.maxDiscountPercent ?? 10;
 
-  const productIds = [...new Set(input.items.map((item) => item.productId))].map(
+  const productIds = [...new Set(items.map((item) => item.productId))].map(
     (id) => new Types.ObjectId(id),
   );
   const [resolved, products] = await Promise.all([
     resolvePrices(
       ctx,
-      input.items.map((item) => ({
+      items.map((item) => ({
         productId: new Types.ObjectId(item.productId),
         ...(item.priceListId ? { priceListId: new Types.ObjectId(item.priceListId) } : {}),
         quantity: item.quantity,
       })),
     ),
-    // The cost is selected explicitly: it is hidden by default so that only code
-    // which means to freeze it onto the line ever reads it.
     Product.find({ ...orgFilter(ctx), _id: { $in: productIds } })
-      .select('+costPricePaise isActive')
+      .select('isActive')
       .lean(),
   ]);
   const productById = new Map(products.map((product) => [product._id.toString(), product]));
 
-  const items: PreparedLine[] = input.items.map((item, index) => {
+  return items.map((item, index) => {
     const price = resolved[index]!;
     const product = productById.get(item.productId);
     if (!product) throw AppError.notFound('Product');
@@ -190,13 +185,6 @@ export async function prepareInvoice(
       );
     }
 
-    const amounts = computeLineAmounts({
-      unitPricePaise,
-      quantity: item.quantity,
-      discountPercent,
-      taxRatePercent: price.taxRatePercent,
-    });
-
     return {
       productId: product._id,
       productName: price.productName,
@@ -206,8 +194,75 @@ export async function prepareInvoice(
       unitPricePaise,
       discountPercent,
       taxRatePercent: price.taxRatePercent,
+    };
+  });
+}
+
+export interface InvoiceHeaderInput {
+  branchId: string;
+  customerId?: string;
+  customerName?: string;
+  /** Overrides the customer's usual credit days for this invoice. */
+  creditDays?: number;
+  notes?: string;
+}
+
+/**
+ * Everything that must be true before an invoice can be written, and the
+ * invoice that would result, built from lines whose terms are already settled.
+ * Performs no writes.
+ */
+export async function prepareInvoiceFromLines(
+  ctx: TenantContext,
+  header: InvoiceHeaderInput,
+  lines: FrozenLine[],
+): Promise<PreparedInvoice> {
+  const branchId = new Types.ObjectId(header.branchId);
+  assertBranchAccess(ctx, branchId);
+
+  const [branch, organization] = await Promise.all([
+    Branch.findOne({ ...orgFilter(ctx), _id: branchId }).select('name').lean(),
+    Organization.findById(ctx.organizationId).select('settings timezone').lean(),
+  ]);
+  if (!branch) throw AppError.notFound('Branch');
+
+  let customerName = header.customerName?.trim();
+  let customerId: Types.ObjectId | undefined;
+  let customerCreditDays = 0;
+  let creditLimitPaise: number | undefined;
+  if (header.customerId) {
+    const customer = await Customer.findOne({ ...orgFilter(ctx), _id: header.customerId }).lean();
+    if (!customer) throw AppError.badRequest('Select a valid customer');
+    if (!customer.isActive) throw AppError.badRequest(`${customer.name} is marked inactive`);
+    customerId = customer._id;
+    customerName = customer.name;
+    customerCreditDays = customer.creditDays ?? 0;
+    creditLimitPaise = customer.creditLimitPaise;
+  }
+  if (!customerName) customerName = 'Walk-in Customer';
+
+  // The cost is selected explicitly: it is hidden by default so that only code
+  // which means to freeze it onto the line ever reads it.
+  const products = await Product.find({
+    ...orgFilter(ctx),
+    _id: { $in: [...new Set(lines.map((line) => line.productId.toString()))].map((id) => new Types.ObjectId(id)) },
+  })
+    .select('+costPricePaise')
+    .lean();
+  const costById = new Map(products.map((product) => [product._id.toString(), product.costPricePaise ?? 0]));
+
+  const items: PreparedLine[] = lines.map((line) => {
+    const amounts = computeLineAmounts({
+      unitPricePaise: line.unitPricePaise,
+      quantity: line.quantity,
+      discountPercent: line.discountPercent,
+      taxRatePercent: line.taxRatePercent,
+    });
+
+    return {
+      ...line,
       ...amounts,
-      unitCostPaise: product.costPricePaise ?? 0,
+      unitCostPaise: costById.get(line.productId.toString()) ?? 0,
       returnedQty: 0,
     };
   });
@@ -237,15 +292,24 @@ export async function prepareInvoice(
     branchName: branch.name,
     ...(customerId ? { customerId } : {}),
     customerName,
-    creditDays: input.creditDays ?? customerCreditDays,
+    creditDays: header.creditDays ?? customerCreditDays,
     timeZone: organization?.timezone ?? 'Asia/Kolkata',
-    ...(input.notes ? { notes: input.notes } : {}),
+    ...(header.notes ? { notes: header.notes } : {}),
     items,
     discountPaise: sumPaise(items.map((line) => line.discountPaise)),
     subtotalPaise,
     taxPaise,
     totalPaise,
   };
+}
+
+/** Price the lines, then build the invoice they make. */
+export async function prepareInvoice(
+  ctx: TenantContext,
+  input: CreateInvoiceInput,
+): Promise<PreparedInvoice> {
+  const lines = await priceDocumentLines(ctx, input.items);
+  return prepareInvoiceFromLines(ctx, input, lines);
 }
 
 /**
