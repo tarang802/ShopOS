@@ -16,6 +16,7 @@ import { supplierPaymentsRouter } from '../modules/purchasing/supplierPayments.r
 import { pricingRouter } from '../modules/pricing/pricing.routes';
 import { productsRouter } from '../modules/products/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
+import { reportsRouter } from '../modules/reports/reports.routes';
 import { quotationsRouter } from '../modules/sales/quotations.routes';
 import { salesOrdersRouter } from '../modules/sales/salesOrders.routes';
 import { salesReturnsRouter } from '../modules/sales/salesReturns.routes';
@@ -61,5 +62,6 @@ apiRouter.use('/payments', paymentsRouter);
 
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/notifications', notificationsRouter);
+apiRouter.use('/reports', reportsRouter);
 apiRouter.use('/audit-logs', auditRouter);
 

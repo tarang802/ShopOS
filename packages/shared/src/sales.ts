@@ -109,11 +109,17 @@ export function deriveInvoiceStatus(invoice: InvoiceAmounts & { cancelled?: bool
   return INVOICE_STATUSES.ISSUED;
 }
 
-/** Whole days an amount is overdue as of `now`. Zero when not yet due. */
+/**
+ * Days an amount is overdue as of `now`. Zero when not yet due.
+ *
+ * Rounded up: due dates run to the end of their day, so the morning after the due
+ * date it is one day overdue, not zero. Rounding down would report an amount that
+ * fell due last night as not late at all.
+ */
 export function daysOverdue(dueDate: Date | string, now: Date = new Date()): number {
   const due = new Date(dueDate).getTime();
   const diff = now.getTime() - due;
-  return diff > 0 ? Math.floor(diff / 86_400_000) : 0;
+  return diff > 0 ? Math.ceil(diff / 86_400_000) : 0;
 }
 
 /** Aging buckets used by the receivables and payables reports. */
@@ -178,4 +184,35 @@ export function endOfDayInTimeZone(date: Date, timeZone: string): Date {
   const offset = probeAsUtc - wallClockAsUtc;
 
   return new Date(wallClockAsUtc - offset);
+}
+
+/** The first instant of the calendar day that `date` falls on, in a given timezone. */
+export function startOfDayInTimeZone(date: Date, timeZone: string): Date {
+  // The end of the previous day, plus a millisecond, is the start of this one.
+  const yesterday = new Date(date.getTime() - 86_400_000);
+  return new Date(endOfDayInTimeZone(yesterday, timeZone).getTime() + 1);
+}
+
+/**
+ * Turn a date-only range (the 1st to the 31st) into the real instants it covers in
+ * the business's timezone.
+ *
+ * A date typed or sent as `2026-10-01` arrives as midnight UTC, which in India is
+ * already 5:30am. Treating it as an instant would drop the early hours of the first
+ * day and add the early hours of the day after the last. Reading it as a calendar
+ * date, and asking where that day starts and ends locally, avoids both.
+ */
+export function calendarRange(
+  from: Date | undefined,
+  to: Date | undefined,
+  timeZone: string,
+): { from: Date | undefined; to: Date | undefined } {
+  // Noon UTC sits inside the same calendar day in every timezone that matters here.
+  const noon = (date: Date) =>
+    new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12));
+
+  return {
+    from: from ? startOfDayInTimeZone(noon(from), timeZone) : undefined,
+    to: to ? endOfDayInTimeZone(noon(to), timeZone) : undefined,
+  };
 }
