@@ -14,12 +14,14 @@ import {
   Branch,
   Brand,
   Category,
+  Customer,
   Membership,
   Organization,
   PriceList,
   Product,
   ProductPrice,
   Role,
+  Supplier,
   Unit,
   User,
 } from '../db/models';
@@ -106,25 +108,16 @@ async function wipeExistingDemo(): Promise<void> {
 
   // Collections are cleared directly rather than through the services, because
   // the services deliberately refuse to delete business history.
-  const collections = [
-    'branches',
-    'brands',
-    'categories',
-    'units',
-    'products',
-    'pricelists',
-    'productprices',
-    'inventorybalances',
-    'inventorytransactions',
-    'stockadjustments',
-    'stocktransfers',
-    'auditlogs',
-    'memberships',
-    'roles',
-    'counters',
-  ];
+  //
+  // Every collection is swept rather than a hand-kept list: a list silently goes
+  // stale each time a module adds a collection, and the orphaned documents left
+  // behind then skew every figure on the dashboard after a reseed. A collection
+  // with no organizationId simply matches nothing.
+  const keep = new Set(['organizations', 'users', 'migrations']);
+  const existingCollections = await mongoose.connection.db!.listCollections().toArray();
 
-  for (const name of collections) {
+  for (const { name } of existingCollections) {
+    if (keep.has(name) || name.startsWith('system.')) continue;
     await mongoose.connection.collection(name).deleteMany({ organizationId });
   }
   await Organization.deleteOne({ _id: organizationId });
@@ -300,6 +293,20 @@ async function seed(): Promise<void> {
       ]);
     }
   }
+
+  const retailListId = retail._id;
+  await Customer.create([
+    { ...orgScope, name: 'Bansal Book Depot', phone: '9811100001', city: 'Bhagalpur', defaultPriceListId: wholesale._id },
+    { ...orgScope, name: 'Sharma Stationers', phone: '9811100002', city: 'Patna', defaultPriceListId: wholesale._id },
+    { ...orgScope, name: 'Vidya Mandir School', phone: '9811100003', city: 'Bhagalpur', defaultPriceListId: wholesale._id },
+    { ...orgScope, name: 'Maa Durga Kirana Store', phone: '9811100004', city: 'Ranchi', defaultPriceListId: retailListId },
+  ]);
+
+  await Supplier.create([
+    { ...orgScope, name: 'Rajesh Paper Traders', phone: '9800011122', city: 'Delhi', state: 'Delhi' },
+    { ...orgScope, name: 'Natraj Distributors', phone: '9800011133', city: 'Kolkata', state: 'West Bengal' },
+    { ...orgScope, name: 'Camlin Wholesale Depot', phone: '9800011144', city: 'Mumbai', state: 'Maharashtra' },
+  ]);
 
   logger.info(
     {
