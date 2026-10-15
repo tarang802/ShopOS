@@ -39,6 +39,8 @@ export const LABELS = {
   auditLog: { en: 'Activity Log', hi: 'गतिविधि' },
   customers: { en: 'Customers', hi: 'ग्राहक' },
   sales: { en: 'Sales', hi: 'बिक्री' },
+  quotations: { en: 'Quotations', hi: 'कोटेशन' },
+  salesOrders: { en: 'Sales Orders', hi: 'बिक्री ऑर्डर' },
   suppliers: { en: 'Suppliers', hi: 'सप्लायर' },
   purchases: { en: 'Purchase Orders', hi: 'खरीद ऑर्डर' },
   payments: { en: 'Payments', hi: 'भुगतान' },

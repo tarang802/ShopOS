@@ -23,6 +23,10 @@ import { CustomersPage } from '@/features/customers/CustomersPage';
 import { InvoicesPage } from '@/features/sales/InvoicesPage';
 import { InvoiceDetailPage } from '@/features/sales/InvoiceDetailPage';
 import { PaymentsPage } from '@/features/payments/PaymentsPage';
+import { QuotationsPage } from '@/features/sales/QuotationsPage';
+import { QuotationDetailPage } from '@/features/sales/QuotationDetailPage';
+import { SalesOrdersPage } from '@/features/sales/SalesOrdersPage';
+import { SalesOrderDetailPage } from '@/features/sales/SalesOrderDetailPage';
 import { SuppliersPage } from '@/features/purchasing/SuppliersPage';
 import { PurchaseOrdersPage } from '@/features/purchasing/PurchaseOrdersPage';
 import { PurchaseOrderDetailPage } from '@/features/purchasing/PurchaseOrderDetailPage';
@@ -190,6 +194,38 @@ export function App() {
           element={
             <RequirePermission permission="sales:view">
               <InvoiceDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="quotations"
+          element={
+            <RequirePermission permission="sales:view">
+              <QuotationsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="quotations/:id"
+          element={
+            <RequirePermission permission="sales:view">
+              <QuotationDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="sales-orders"
+          element={
+            <RequirePermission permission="sales:view">
+              <SalesOrdersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="sales-orders/:id"
+          element={
+            <RequirePermission permission="sales:view">
+              <SalesOrderDetailPage />
             </RequirePermission>
           }
         />
