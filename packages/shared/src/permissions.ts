@@ -37,6 +37,9 @@ export const PERMISSIONS = {
   PURCHASES_CREATE: 'purchases:create',
   PURCHASES_UPDATE: 'purchases:update',
   PURCHASES_RECEIVE: 'purchases:receive',
+  /** Money out to a supplier - recorded separately from ordering and receiving. */
+  PURCHASES_PAY: 'purchases:pay',
+  PURCHASES_RETURN: 'purchases:return',
 
   // Sales
   SALES_VIEW: 'sales:view',
@@ -44,6 +47,7 @@ export const PERMISSIONS = {
   SALES_UPDATE: 'sales:update',
   SALES_CANCEL: 'sales:cancel',
   SALES_DISCOUNT_OVERRIDE: 'sales:discount_override',
+  SALES_RETURN: 'sales:return',
 
   // Parties
   CUSTOMERS_VIEW: 'customers:view',
@@ -54,6 +58,12 @@ export const PERMISSIONS = {
   // Finance
   PAYMENTS_VIEW: 'payments:view',
   PAYMENTS_CREATE: 'payments:create',
+  /** Reversing a recorded payment. Kept apart because it re-opens a settled bill. */
+  PAYMENTS_VOID: 'payments:void',
+
+  // What goods cost the business. Separate from pricing because a counter
+  // assistant who can quote a rate has no need to know the margin on it.
+  COSTS_VIEW: 'costs:view',
 
   // Reporting
   REPORTS_VIEW: 'reports:view',
@@ -111,7 +121,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     P.PRICING_VIEW,
     P.INVENTORY_VIEW, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER,
     P.PURCHASES_VIEW, P.PURCHASES_CREATE, P.PURCHASES_UPDATE, P.PURCHASES_RECEIVE,
-    P.SALES_VIEW, P.SALES_CREATE, P.SALES_UPDATE, P.SALES_CANCEL,
+    P.PURCHASES_PAY, P.PURCHASES_RETURN,
+    P.SALES_VIEW, P.SALES_CREATE, P.SALES_UPDATE, P.SALES_CANCEL, P.SALES_RETURN,
+    P.COSTS_VIEW,
     P.CUSTOMERS_VIEW, P.CUSTOMERS_MANAGE,
     P.SUPPLIERS_VIEW, P.SUPPLIERS_MANAGE,
     P.PAYMENTS_VIEW, P.PAYMENTS_CREATE,
@@ -133,7 +145,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
   INVENTORY_STAFF: [
     P.PRODUCTS_VIEW,
     P.INVENTORY_VIEW, P.INVENTORY_ADJUST, P.INVENTORY_TRANSFER,
-    P.PURCHASES_VIEW, P.PURCHASES_RECEIVE,
+    P.PURCHASES_VIEW, P.PURCHASES_RECEIVE, P.PURCHASES_RETURN,
     P.SUPPLIERS_VIEW,
   ],
 
@@ -142,10 +154,11 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     P.PRODUCTS_VIEW,
     P.PRICING_VIEW,
     P.INVENTORY_VIEW,
-    P.PURCHASES_VIEW,
+    P.PURCHASES_VIEW, P.PURCHASES_PAY,
     P.SALES_VIEW,
     P.CUSTOMERS_VIEW, P.SUPPLIERS_VIEW,
-    P.PAYMENTS_VIEW, P.PAYMENTS_CREATE,
+    P.PAYMENTS_VIEW, P.PAYMENTS_CREATE, P.PAYMENTS_VOID,
+    P.COSTS_VIEW,
     P.REPORTS_VIEW,
     P.AUDIT_LOGS_VIEW,
   ],

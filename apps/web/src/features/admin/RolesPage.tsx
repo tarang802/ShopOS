@@ -40,6 +40,7 @@ const GROUP_LABELS: Record<string, string> = {
   customers: 'Customers',
   suppliers: 'Suppliers',
   payments: 'Payments',
+  costs: 'Costs and margins',
   reports: 'Reports',
   users: 'Staff',
   roles: 'Roles',
