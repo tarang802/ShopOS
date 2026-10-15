@@ -15,6 +15,7 @@ import {
   Organization,
   Product,
   PurchaseOrder,
+  PurchaseReturn,
   Supplier,
   SupplierPayment,
 } from '../../db/models';
@@ -394,8 +395,12 @@ export async function getPurchaseOrder(ctx: TenantContext, purchaseOrderId: Type
   if (!po) throw AppError.notFound('Purchase order');
   assertBranchAccess(ctx, po.branchId);
 
-  const [receipts, payments] = await Promise.all([
+  const [receipts, returns, payments] = await Promise.all([
     GoodsReceipt.find({ ...orgFilter(ctx), purchaseOrderId }).sort({ receivedDate: -1 }).lean(),
+    PurchaseReturn.find({ ...orgFilter(ctx), purchaseOrderId })
+      .sort({ returnDate: 1, _id: 1 })
+      .select('number returnDate reason totalPaise')
+      .lean(),
     SupplierPayment.find({ ...orgFilter(ctx), 'allocations.purchaseOrderId': purchaseOrderId })
       .sort({ paymentDate: 1, _id: 1 })
       .select('number paymentDate method reference status voidedAt voidReason allocations')
@@ -405,6 +410,7 @@ export async function getPurchaseOrder(ctx: TenantContext, purchaseOrderId: Type
   return {
     ...presentPurchaseOrder(po),
     receipts,
+    returns,
     // One payment can cover several orders, so show only the share for this one.
     payments: payments.map((payment) => ({
       _id: payment._id,

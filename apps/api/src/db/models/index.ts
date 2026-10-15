@@ -15,6 +15,7 @@ export * from './GoodsReceipt';
 export * from './Invoice';
 export * from './Payment';
 export * from './PurchaseOrder';
+export * from './PurchaseReturn';
 export * from './Quotation';
 export * from './SalesOrder';
 export * from './SalesReturn';
