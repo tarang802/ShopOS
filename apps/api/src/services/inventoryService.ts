@@ -4,7 +4,13 @@ import {
   INBOUND_TRANSACTION_TYPES,
   type InventoryTransactionType,
 } from '@shopos/shared';
-import { InventoryBalance, InventoryTransaction, Organization, Product } from '../db/models';
+import {
+  InventoryBalance,
+  InventoryTransaction,
+  Organization,
+  Product,
+  Unit,
+} from '../db/models';
 import { sessionOption } from '../db/transaction';
 import { AppError } from '../core/AppError';
 import { orgFilter, type TenantContext } from '../core/tenantContext';
@@ -98,6 +104,19 @@ export async function applyMovement(
     .select('name sku unitSymbol unitId')
     .lean();
   if (!product) throw AppError.notFound('Product');
+
+  // You can sell 2.5 kg of nails but not 2.5 pencils. The unit is only looked up
+  // for a fractional quantity, so the common whole-number movement pays nothing.
+  if (!Number.isInteger(input.quantity)) {
+    const unit = await Unit.findOne({ ...orgFilter(ctx), _id: product.unitId })
+      .select('name allowsDecimal')
+      .lean();
+    if (unit && !unit.allowsDecimal) {
+      throw AppError.badRequest(
+        `${product.name} is counted in whole ${unit.name.toLowerCase()}s, so ${input.quantity} is not a valid quantity`,
+      );
+    }
+  }
 
   const goesIn = input.direction ? input.direction === 'IN' : isInbound(input.type);
   const delta = goesIn ? input.quantity : -input.quantity;
