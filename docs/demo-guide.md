@@ -30,6 +30,24 @@ through the real API: purchases, credit sales, a part-payment, a return, a cance
 invoice, a quotation and a sales order. That is what makes the dashboard and
 reports show real numbers instead of zeros.
 
+**Or build a shop under your own account** (a fuller, owner-style dataset: three
+branches, 24 products with rate slabs, six staff with different roles, ten customers on
+credit, five suppliers, purchases, sales, returns, a bounced cheque, quotations, orders
+and the actions the system must refuse):
+
+```bash
+node scripts/demo-owner.mjs build you@example.com "Gupta Traders"
+npm run demo:age --workspace @shopos/api
+node scripts/demo-owner.mjs facts
+```
+
+`build` registers the owner (or, if the account already exists and was given a
+password, signs in to its empty shop) and writes the generated sign-in details to
+`demo/credentials.json`, which is git-ignored and never printed. `demo:age` is
+**demo-only**: it moves document dates back about two months so overdue bills, ageing
+and a sales trend exist. It changes dates only, not amounts or statuses - say so if
+you are asked. `facts` saves a snapshot of the figures for writing a report.
+
 Use the `MONGODB_URI` from `apps/api/.env` if you have a working online (Atlas)
 database; otherwise set it to the local one:
 

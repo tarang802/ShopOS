@@ -33,3 +33,6 @@ Thumbs.db
 
 # local data
 /data/
+
+# generated demo shop: sign-in details and a data snapshot
+demo/
