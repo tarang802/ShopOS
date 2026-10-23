@@ -12,7 +12,7 @@
  * business rule is exercised and some steps are *expected* to be refused (selling
  * past a credit limit, paying more than is owed); those are recorded as refusals.
  *
- * The generated password is written to demo/credentials.txt (git-ignored), never
+ * The generated password is written to demo/credentials.json (git-ignored), never
  * printed. `facts` signs in and writes demo/facts.json for the written report.
  *
  * Needs the API running. Override its address with API_URL.
