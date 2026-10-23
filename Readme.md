@@ -131,6 +131,7 @@ scripts         Smoke test and the local replica-set launcher
 | `npm run dev` | API and web together |
 | `npm run db:local` | Private MongoDB replica set on port 27018 |
 | `npm run seed` | Rebuild the demo business |
+| `npm run demo-data` | Add sample sales, purchases and payments to the demo business |
 | `npm test` | All tests |
 | `npm run smoke` | End-to-end checks against a running API |
 | `npm run typecheck` | Type-check every workspace |
@@ -147,3 +148,4 @@ scripts         Smoke test and the local replica-set launcher
 | [security.md](docs/security.md) | Controls, how they are tested, known gaps |
 | [keys-and-secrets.md](docs/keys-and-secrets.md) | Each key, where to get it, what breaks without it |
 | [deployment.md](docs/deployment.md) | Local setup, Docker, CI, health checks |
+| [demo-guide.md](docs/demo-guide.md) | Presenting the project: setup, demo script, review questions |

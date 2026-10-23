@@ -21,6 +21,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "db:local": "node scripts/local-mongo.mjs",
     "seed": "npm run seed --workspace @shopos/api",
+    "demo-data": "node scripts/demo-activity.mjs",
     "smoke": "npm run seed --workspace @shopos/api && bash scripts/smoke-test.sh"
   },
   "devDependencies": {
