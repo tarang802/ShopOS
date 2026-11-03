@@ -72,6 +72,16 @@ const envSchema = z
       .default('true')
       .transform((value) => value === 'true'),
 
+    /**
+     * Build any missing database indexes at startup. Production has Mongoose's
+     * automatic indexing switched off, so this is what gives a new database its unique
+     * constraints. Safe to leave on: it only adds what is missing.
+     */
+    SYNC_INDEXES: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
   })
   .superRefine((value, ctx) => {

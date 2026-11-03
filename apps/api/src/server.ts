@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
+import { ensureIndexes } from './db/indexes';
 import { runMigrations } from './db/migrations';
 import { startBackgroundJobs, stopBackgroundJobs } from './jobs';
 import { logger } from './core/logger';
@@ -20,6 +21,7 @@ let server: Server | undefined;
 
 async function start(): Promise<void> {
   await connectDatabase();
+  if (env.SYNC_INDEXES) await ensureIndexes();
   await runMigrations();
 
   const app = createApp();
