@@ -41,30 +41,63 @@ jobs:
       - name: Dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-  docker:
-    name: Docker images build
+  image:
+    name: Production image builds and serves
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: verify
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
 
-      - name: API image
+      - name: Build the single-container image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: deploy/api.Dockerfile
-          target: runtime
-          push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
+          file: Dockerfile
+          load: true
+          tags: shopos:ci
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,scope=app,mode=max
 
-      - name: Web image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deploy/web.Dockerfile
-          push: false
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+      - name: Start MongoDB (replica set)
+        run: bash .github/scripts/start-mongo.sh
+
+      - name: Run the image the way a host would
+        run: |
+          docker run -d --name app --network host \
+            -e MONGODB_URI='mongodb://127.0.0.1:27017/shopos?directConnection=true&replicaSet=rs0' \
+            -e JWT_ACCESS_SECRET="$(openssl rand -hex 48)" \
+            -e JWT_REFRESH_SECRET="$(openssl rand -hex 48)" \
+            -e JOBS_ENABLED=false \
+            -e PORT=4000 \
+            shopos:ci
+
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:4000/api/v1/health/ready >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:4000/api/v1/health/ready || { docker logs app; exit 1; }
+
+      - name: Check it serves the API, the app and its own security
+        run: |
+          set -e
+          # The app shell, at the root and at a deep link.
+          curl -fsS http://127.0.0.1:4000/ | grep -q 'id="root"'
+          curl -fsS http://127.0.0.1:4000/sales/123 | grep -q 'id="root"'
+          # An unknown API path is a JSON 404, not the app.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/api/v1/nope)" = 404
+          # A data endpoint refuses a caller with no session.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/api/v1/products)" = 401
+          # Registering through the image works end to end (transactions, indexes, migrations).
+          code=$(curl -s -o /tmp/register.json -w '%{http_code}' -X POST http://127.0.0.1:4000/api/v1/auth/register \
+            -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:4000' \
+            -d '{"name":"CI Owner","email":"ci-owner@example.test","password":"a-long-enough-password","businessName":"CI Traders"}')
+          cat /tmp/register.json; echo
+          test "$code" = 201
+          docker logs app | tail -20
+
+      - name: Build the two-container images used by docker-compose
+        run: |
+          docker build -f deploy/api.Dockerfile --target runtime -t shopos-api:ci .
+          docker build -f deploy/web.Dockerfile -t shopos-web:ci .

@@ -12,3 +12,7 @@ docs
 data
 coverage
 *.log
+
+# generated demo shop: holds sign-in details, must never enter an image
+demo
+scripts/demo-*.mjs
