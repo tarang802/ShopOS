@@ -30,7 +30,7 @@ tells the owner who owes what.
 | Payments | Allocated across invoices, voidable with a reason, safe against two people paying at once |
 | Receivables | Customer statements, overdue and ageing, refund due |
 | Insight | Dashboard with trends and what needs attention, eight reports with CSV export, notification bell with an hourly overdue sweep |
-| Quality | 186 automated tests, a 56-check smoke test, security review, CI, Docker |
+| Quality | 197 automated tests, a 56-check smoke test, security review, CI that boots the production image, one-command deploy |
 
 Money is stored as whole paise throughout, every document freezes the rate, tax
 and cost it was written with, and the rules live on the server - the browser only
@@ -79,20 +79,28 @@ npm run dev
 API on <http://localhost:4000/api/v1>, web on <http://localhost:5173>. The seed
 prints the demo business's sign-in details when it finishes.
 
-### With Docker
+### Deploying
+
+In production ShopOS is **one container** - the API also serves the built web app -
+plus a **MongoDB Atlas** database. The repository includes a Render blueprint
+(`render.yaml`), so deploying is: create an Atlas cluster, then on Render choose
+**New -> Blueprint**, pick this repository and paste the Atlas connection string.
+Render generates the secrets, builds the root `Dockerfile` and serves it over HTTPS.
+
+Then check the live site from outside:
 
 ```bash
-cp deploy/.env.example .env     # fill in the two JWT secrets
-docker compose up -d --build
+npm run check:deploy -- https://your-shopos.onrender.com
 ```
 
-Then open <http://localhost:8080>. See [docs/deployment.md](docs/deployment.md).
+The step-by-step guide (Atlas, Render, Google sign-in, backups, other hosts and
+Docker Compose) is in [docs/deployment.md](docs/deployment.md).
 
 ### Running the tests
 
 ```bash
 npm run db:local      # if it is not already running
-npm test              # 186 tests: shared arithmetic, API integration, web helpers
+npm test              # 197 tests: shared arithmetic, API integration, web helpers
 npm run smoke         # 56 end-to-end checks against a running API (reseeds first)
 ```
 
@@ -118,9 +126,11 @@ apps/api        Express REST API - 32 models, 18 modules, background jobs
 apps/web        React app
 packages/shared Types, constants and the pure money, pricing and ageing rules
                 used by both sides
-deploy          Dockerfiles and nginx config
+Dockerfile      The production image: API + web app in one container
+render.yaml     Render blueprint (one web service)
+deploy          Production env template, docker-compose images, nginx config
 docs            Architecture, database, API, business rules, security, keys, deployment
-scripts         Smoke test and the local replica-set launcher
+scripts         Smoke test, deploy check, local replica-set launcher, demo builders
 .github         CI
 ```
 
@@ -136,6 +146,7 @@ scripts         Smoke test and the local replica-set launcher
 | `npm run smoke` | End-to-end checks against a running API |
 | `npm run typecheck` | Type-check every workspace |
 | `npm run build` | Production build of both apps |
+| `npm run check:deploy -- <url>` | Read-only checks against a live deployment |
 
 ## Documentation
 
@@ -147,5 +158,5 @@ scripts         Smoke test and the local replica-set launcher
 | [database.md](docs/database.md) | Collections, indexing, concurrency, deletion policy |
 | [security.md](docs/security.md) | Controls, how they are tested, known gaps |
 | [keys-and-secrets.md](docs/keys-and-secrets.md) | Each key, where to get it, what breaks without it |
-| [deployment.md](docs/deployment.md) | Local setup, Docker, CI, health checks |
+| [deployment.md](docs/deployment.md) | Deploying (Render + Atlas, any Docker host), local setup, CI, backups |
 | [demo-guide.md](docs/demo-guide.md) | Presenting the project: setup, demo script, review questions |
