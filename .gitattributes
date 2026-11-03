@@ -1,0 +1,9 @@
+# Keep Unix line endings where Linux reads the file directly: shell scripts run in
+# CI and containers, and Docker and nginx configs. Everything else is normalised.
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+deploy/nginx.conf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
