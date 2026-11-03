@@ -168,3 +168,29 @@ shop must behave exactly like an id that does not exist.
 - Invoice, payment and return lists treated a "to" date as the end of a UTC day, so
   late-evening Indian sales fell into the next day's filter. They now use the shop's
   timezone.
+
+### Found and fixed while preparing to deploy
+
+- **A new production database would have had no indexes.** Production turns
+  Mongoose's automatic indexing off, and nothing else created them, so the unique
+  constraints on email, business slug and document numbers would not exist and
+  concurrent requests could create duplicates. Startup now builds any missing index
+  before taking traffic (`db/indexes.ts`, tested in `indexes.test.ts`).
+- **CI had never run a test.** Every run failed while starting MongoDB, because a
+  service container cannot be given `--replSet`. It now starts MongoDB itself, and
+  the full suite, the build and the audit run on every push.
+- **The lockfile could not install on Linux.** It listed only the Windows builds of
+  esbuild and Tailwind's engine, so CI, Docker and any host would have failed to
+  build. Regenerated from a clean install.
+- **Two high-severity advisories:** zod before 4.6.6 (memory exhaustion from one large
+  array, GHSA-mrhx-c7xc-m3w5) and body-parser 2.0.0-2.3.0 (GHSA-27r3-jxmh-p828).
+  Upgraded to zod 4.6.7 and body-parser 2.4.0; `npm audit --omit=dev` is clean and CI
+  fails the build on any new high-severity advisory.
+- **Same-address requests.** With the site and API on one address, a browser's
+  Origin header on every save would have been refused unless the operator listed the
+  app's own URL. A request from the server's own address is now always allowed;
+  every other site still has to be listed (`security.test.ts`).
+- **Content-Security-Policy written out explicitly.** Pages are now served by the
+  API, so the policy names exactly the outside sources they use (Google Sign-In's
+  script, iframe and popup; Cloudinary images and uploads) and nothing broader: no
+  inline or eval'd script, no wildcard. A test pins it.

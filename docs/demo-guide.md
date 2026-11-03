@@ -150,10 +150,10 @@ business.
 
 ### Close (30 seconds): the engineering
 
-Show the terminal with `npm test` passing (186 tests), then the CI file and
+Show the terminal with `npm test` passing (197 tests), then the CI file and
 `docs/security.md`.
 
-> "186 automated tests, including parallel-payment races and cross-business
+> "197 automated tests, including parallel-payment races and cross-business
 > isolation tests. A security review that found and fixed real bugs. CI and Docker
 > are set up, and everything is documented."
 
@@ -240,7 +240,7 @@ hash; reusing an old refresh token revokes the whole session.
 **What if the shop sells more than it has?** Refused by default (single atomic
 decrement, so the last unit can't be sold twice); the owner can allow it deliberately.
 
-**How do you know it works?** 186 automated tests, a 56-check end-to-end smoke test,
+**How do you know it works?** 197 automated tests, a 56-check end-to-end smoke test,
 and CI that runs them against a real MongoDB on every push.
 
 **What would you do next?** GST-compliant invoices, an edit screen for draft
