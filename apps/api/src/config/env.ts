@@ -73,6 +73,13 @@ const envSchema = z
       .transform((value) => value === 'true'),
 
     /**
+     * Folder holding the built web app (apps/web/dist). When set, this process serves
+     * the site as well as the API, which makes a deployment one service on one
+     * address. Left unset (development), the Vite dev server serves the site.
+     */
+    WEB_DIST_DIR: z.string().trim().min(1).optional(),
+
+    /**
      * Build any missing database indexes at startup. Production has Mongoose's
      * automatic indexing switched off, so this is what gives a new database its unique
      * constraints. Safe to leave on: it only adds what is missing.

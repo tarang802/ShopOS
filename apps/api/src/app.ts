@@ -10,6 +10,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { generalLimiter } from './middleware/rateLimiter';
 import { requestLogger } from './middleware/requestLogger';
+import { serveWebApp } from './middleware/serveWebApp';
 import { AppError } from './core/AppError';
 
 /**
@@ -37,7 +38,39 @@ export function createApp(): Express {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
-  app.use(helmet());
+  /**
+   * Security headers. Helmet's defaults, widened for exactly the three outside things
+   * the web app uses and nothing else:
+   *   - Google Sign-In: its script, its sign-in iframe, its calls, and permission to
+   *     open its popup (hence COOP "same-origin-allow-popups", which keeps the
+   *     page isolated but lets the popup report back);
+   *   - Cloudinary: product images and the direct browser upload.
+   * `upgrade-insecure-requests` is left out: hosting platforms serve HTTPS only and
+   * HSTS pins browsers to it, while the directive would break testing a production
+   * build over plain http://localhost.
+   */
+  app.use(
+    helmet({
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          fontSrc: ["'self'", 'https:', 'data:'],
+          formAction: ["'self'"],
+          frameAncestors: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+          objectSrc: ["'none'"],
+          scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
+          scriptSrcAttr: ["'none'"],
+          styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+          connectSrc: ["'self'", 'https://accounts.google.com/gsi/', 'https://api.cloudinary.com'],
+          frameSrc: ['https://accounts.google.com/gsi/'],
+        },
+      },
+    }),
+  );
 
   /**
    * CORS.
@@ -95,6 +128,9 @@ export function createApp(): Express {
   app.use(generalLimiter);
 
   app.use(API_PREFIX, apiRouter);
+
+  // The built web app, when this process is meant to serve it (production).
+  if (env.WEB_DIST_DIR) serveWebApp(app, env.WEB_DIST_DIR);
 
   app.use(notFound);
   app.use(errorHandler);

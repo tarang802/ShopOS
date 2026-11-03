@@ -160,6 +160,21 @@ describe('what a failure reveals', () => {
     expect(response.headers.get('strict-transport-security')).toBeTruthy();
   });
 
+  it('allows Google sign-in and Cloudinary images and nothing broader', async () => {
+    const response = await fetch(`${server.url}/health`);
+    const csp = response.headers.get('content-security-policy') ?? '';
+
+    expect(csp).toContain("script-src 'self' https://accounts.google.com/gsi/client");
+    expect(csp).toContain('frame-src https://accounts.google.com/gsi/');
+    expect(csp).toContain('https://res.cloudinary.com');
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("script-src-attr 'none'");
+    expect(csp).not.toContain('upgrade-insecure-requests');
+    // No wildcard, and no blanket permission to run inline or eval'd script.
+    expect(csp).not.toMatch(/script-src[^;]*('unsafe-inline'|'unsafe-eval'|\*)/);
+    expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin-allow-popups');
+  });
+
   it('refuses a browser from an origin that is not on the list', async () => {
     const response = await fetch(`${server.url}/products`, { headers: { Origin: 'https://evil.example' } });
     expect(response.status).toBe(403);
