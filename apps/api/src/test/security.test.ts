@@ -1,3 +1,4 @@
+import { request } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { clientFor, newBusiness, startApi, type Business, type TestServer } from './testkit';
 
@@ -162,6 +163,39 @@ describe('what a failure reveals', () => {
   it('refuses a browser from an origin that is not on the list', async () => {
     const response = await fetch(`${server.url}/products`, { headers: { Origin: 'https://evil.example' } });
     expect(response.status).toBe(403);
+  });
+});
+
+/** fetch will not let a script choose the Host header, so speak plain HTTP for this one. */
+function callWithHeaders(url: string, headers: Record<string, string>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = request(url, { headers }, (response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+describe('when the API also serves the web app', () => {
+  it('lets a page call the address it was served from, and nobody else', async () => {
+    const url = `${server.url}/health`;
+
+    // Behind a proxy the browser's address arrives as Host plus X-Forwarded-Proto.
+    const ownSite = await callWithHeaders(url, {
+      Host: 'shop.example.test',
+      'X-Forwarded-Proto': 'https',
+      Origin: 'https://shop.example.test',
+    });
+    expect(ownSite).toBe(200);
+
+    const otherSite = await callWithHeaders(url, {
+      Host: 'shop.example.test',
+      'X-Forwarded-Proto': 'https',
+      Origin: 'https://evil.example',
+    });
+    expect(otherSite).toBe(403);
   });
 });
 

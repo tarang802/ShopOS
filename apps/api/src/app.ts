@@ -53,26 +53,34 @@ export function createApp(): Express {
   const isLocalhostOrigin = (origin: string) =>
     /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
+  /**
+   * A browser attaches an Origin header to every same-site POST, PUT, PATCH and
+   * DELETE, not only to cross-site ones. When this API also serves the web app (one
+   * address for both, as in a single-container deployment) every save would
+   * otherwise be refused unless the operator remembered to list the app's own URL.
+   * So a request whose Origin is this server's own address is always allowed; any
+   * other site still has to be on the list.
+   */
+  const isOwnOrigin = (origin: string, host: string | undefined, protocol: string) =>
+    host !== undefined && origin === `${protocol}://${host}`;
+
   app.use(
-    cors({
-      origin(origin, callback) {
-        // Requests without an Origin header are server-to-server or curl, not a
-        // browser, so the same-origin policy does not apply to them.
-        if (!origin) {
-          callback(null, true);
-          return;
-        }
-        if (env.CORS_ORIGINS.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        if (!isProduction && isLocalhostOrigin(origin)) {
-          callback(null, true);
-          return;
-        }
+    cors((req, callback) => {
+      const origin = req.header('Origin');
+
+      // Requests without an Origin header are server-to-server or curl, not a
+      // browser, so the same-origin policy does not apply to them.
+      const allowed =
+        !origin ||
+        isOwnOrigin(origin, req.get('host'), req.protocol) ||
+        env.CORS_ORIGINS.includes(origin) ||
+        (!isProduction && isLocalhostOrigin(origin));
+
+      if (!allowed) {
         callback(AppError.forbidden(`Origin ${origin} is not allowed`));
-      },
-      credentials: true,
+        return;
+      }
+      callback(null, { origin: true, credentials: true });
     }),
   );
 
