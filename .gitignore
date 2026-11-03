@@ -12,6 +12,8 @@ build/
 .env
 .env.*
 !.env.example
+# production.env and the like, copied from deploy/production.env.example
+*.env
 *.pem
 *.key
 

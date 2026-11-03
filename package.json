@@ -20,6 +20,7 @@
     "test": "npm run test --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "db:local": "node scripts/local-mongo.mjs",
+    "check:deploy": "node scripts/check-deploy.mjs",
     "seed": "npm run seed --workspace @shopos/api",
     "demo-data": "node scripts/demo-activity.mjs",
     "smoke": "npm run seed --workspace @shopos/api && bash scripts/smoke-test.sh"
